@@ -14,6 +14,9 @@ jobs:
     timeout-minutes: 15
 
     strategy:
+      # fail-fast: false for open-source matrices — when a cell fails we
+      # want to see whether it's specific to one (PHP, Laravel, stability)
+      # combination or all of them. Saves a second push just to probe.
       fail-fast: false
       matrix:
         os: [ubuntu-latest]

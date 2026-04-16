@@ -31,6 +31,36 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.1.3] — 2026-04-16
+
+CI-only fix release — no runtime behavior changes. All 12 matrix cells
+(PHP 8.2–8.4 × Laravel 11–12 × prefer-lowest/stable) are now green on
+Linux.
+
+### Fixed
+
+- **PSR-4 case mismatch on Linux.** Stub test fixtures lived under
+  `tests/stubs/` (lowercase) but the PHP namespace segment was `Stubs`
+  (capital S). Windows and macOS (case-insensitive filesystems) didn't
+  care; Linux CI couldn't autoload any of the fixture classes and every
+  feature test crashed at `pest --ci` with exit code 2. Renamed the
+  directory to `tests/Stubs/` and updated the `loadMigrationsFrom()`
+  path in the base TestCase.
+- README badges: removed the blank `&token=` query on the Codecov
+  badge (shields.io was rendering "invalid query parameter: token"),
+  swapped the packagist license badge for a static shield linking to
+  LICENSE.md (the packagist version misreports license on fresh
+  packages until reindex).
+
+### Changed
+
+- CI matrix now runs with `fail-fast: false` so a regression in one
+  (PHP, Laravel, stability) combo surfaces every broken cell in a
+  single push instead of hiding the rest behind a cancelled badge.
+- Added a `pest --log-junit` step + conditional artifact upload on
+  failure. Future CI failures will include a downloadable junit XML
+  with full test-level detail — no more log-hunting.
+
 ## [0.1.2] — 2026-04-16
 
 Controller-level feature coverage plus CI coverage reporting.
