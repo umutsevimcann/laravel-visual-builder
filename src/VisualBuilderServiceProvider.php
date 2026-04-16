@@ -7,19 +7,29 @@ namespace Umutsevimcann\VisualBuilder;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
+use Umutsevimcann\VisualBuilder\Authorization\GateAuthorization;
+use Umutsevimcann\VisualBuilder\Contracts\AuthorizationInterface;
+use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
 
 /**
- * VisualBuilderServiceProvider — package wiring.
+ * Service provider — wires the package into Laravel.
  *
- * Uses spatie/laravel-package-tools to declaratively register:
- *   - Config (publishable, auto-merged)
- *   - Migrations (publishable)
- *   - Views (namespaced 'visual-builder::')
- *   - Assets (JS + CSS, publishable)
- *   - Install command (php artisan visual-builder:install)
+ * Declarative configuration via spatie/laravel-package-tools:
+ *   - config file (publishable + auto-merged)
+ *   - views namespace (visual-builder::*)
+ *   - publishable assets (CSS/JS)
+ *   - migrations (publishable; users opt-in to run)
+ *   - install command (php artisan visual-builder:install)
  *
- * Binding of contracts → default implementations happens in registerBindings().
- * Users override by re-binding their own implementations in AppServiceProvider.
+ * Runtime container bindings in packageRegistered():
+ *   - SectionTypeRegistry: singleton so all users of the registry see the
+ *     same registered type list across the request.
+ *   - AuthorizationInterface: default bound to GateAuthorization, which
+ *     respects the optional `visual-builder.authorization_gate` config.
+ *
+ * User apps override any contract binding in their own service provider
+ * AFTER this one runs (order of provider registration). Repositories,
+ * controllers, actions, and routes are registered in Phase C.
  */
 final class VisualBuilderServiceProvider extends PackageServiceProvider
 {
@@ -45,26 +55,16 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * Bind contracts to default implementations.
-     * User apps override any of these by re-binding in their own
-     * service provider AFTER this one runs.
+     * Bind package services in the IoC container.
+     *
+     * Users override any of these by re-binding the same abstract in their
+     * AppServiceProvider::register() — their provider runs after ours so
+     * their bindings win.
      */
     public function packageRegistered(): void
     {
-        // Contracts → default implementations (registered in Phase B/C commits)
-        // Example:
-        // $this->app->bind(
-        //     Contracts\BuilderRepositoryInterface::class,
-        //     Infrastructure\Repositories\EloquentBuilderRepository::class
-        // );
-    }
+        $this->app->singleton(SectionTypeRegistry::class);
 
-    /**
-     * Boot-time setup after all services are registered.
-     */
-    public function packageBooted(): void
-    {
-        // Register route files, blade components, event listeners, etc.
-        // Details added in later phases.
+        $this->app->bind(AuthorizationInterface::class, GateAuthorization::class);
     }
 }
