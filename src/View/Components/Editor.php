@@ -7,9 +7,12 @@ namespace Umutsevimcann\VisualBuilder\View\Components;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Collection;
 use Illuminate\View\Component;
 use RuntimeException;
 use Umutsevimcann\VisualBuilder\Contracts\BuilderRepositoryInterface;
+use Umutsevimcann\VisualBuilder\Domain\Models\BuilderSection;
+use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeInterface;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
 use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
 
@@ -28,12 +31,28 @@ use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
  * component wherever it fits: AdminLTE, Filament, Nova, custom admins all
  * work. The component outputs a self-contained UI shell that manages its
  * own CSS/JS via the published assets.
+ *
+ * All view data is exposed as public readonly properties — Laravel's Blade
+ * Component system passes them into the view automatically, so the view
+ * can reference $target, $sections, $types, $tokens, $bootstrap directly.
  */
 final class Editor extends Component
 {
     public readonly string $targetType;
 
     public readonly int $targetId;
+
+    /** @var Collection<int, BuilderSection> */
+    public readonly Collection $sections;
+
+    /** @var array<string, SectionTypeInterface> */
+    public readonly array $types;
+
+    /** @var array<string, mixed> */
+    public readonly array $tokens;
+
+    /** @var array<string, mixed> */
+    public readonly array $bootstrap;
 
     /**
      * @throws RuntimeException When the target's class is not in the morph map.
@@ -43,25 +62,34 @@ final class Editor extends Component
     ) {
         $this->targetType = $this->resolveMorphAlias($target);
         $this->targetId = (int) $target->getKey();
-    }
 
-    public function render(): View
-    {
         /** @var SectionTypeRegistry $registry */
         $registry = app(SectionTypeRegistry::class);
         /** @var BuilderRepositoryInterface $repository */
         $repository = app(BuilderRepositoryInterface::class);
-        /** @var DesignTokenService $tokens */
-        $tokens = app(DesignTokenService::class);
+        /** @var DesignTokenService $tokenService */
+        $tokenService = app(DesignTokenService::class);
 
-        return view('visual-builder::components.editor', [
+        $this->sections = $repository->forTarget($target);
+        $this->types = $registry->all();
+        $this->tokens = $tokenService->all();
+        $this->bootstrap = $this->buildBootstrapPayload($registry, $tokenService);
+    }
+
+    public function render(): View
+    {
+        // Explicit data pass — Blade Component::data() extraction can be
+        // finicky with readonly promoted/assigned properties on some
+        // Laravel versions. Passing data() result directly avoids edge
+        // cases and keeps the view-variable contract obvious.
+        return view('visual-builder::editor', [
             'target' => $this->target,
             'targetType' => $this->targetType,
             'targetId' => $this->targetId,
-            'sections' => $repository->forTarget($this->target),
-            'types' => $registry->all(),
-            'tokens' => $tokens->all(),
-            'bootstrap' => $this->bootstrapPayload($repository, $registry, $tokens),
+            'sections' => $this->sections,
+            'types' => $this->types,
+            'tokens' => $this->tokens,
+            'bootstrap' => $this->bootstrap,
         ]);
     }
 
@@ -92,10 +120,9 @@ final class Editor extends Component
      *
      * @return array<string, mixed>
      */
-    private function bootstrapPayload(
-        BuilderRepositoryInterface $repository,
+    private function buildBootstrapPayload(
         SectionTypeRegistry $registry,
-        DesignTokenService $tokens,
+        DesignTokenService $tokenService,
     ): array {
         $namePrefix = (string) config('visual-builder.routes.name_prefix', 'visual-builder.');
         $builderPrefix = (string) config('visual-builder.builder_query_param', 'builder');
@@ -128,7 +155,7 @@ final class Editor extends Component
             ];
         }
 
-        $sectionsPayload = $repository->forTarget($this->target)->map(static fn ($s) => [
+        $sectionsPayload = $this->sections->map(static fn ($s) => [
             'id' => $s->id,
             'type' => $s->type,
             'instance_key' => $s->instance_key,
@@ -145,7 +172,7 @@ final class Editor extends Component
             ],
             'sections' => $sectionsPayload,
             'types' => $typesPayload,
-            'tokens' => $tokens->all(),
+            'tokens' => $tokenService->all(),
             'routes' => [
                 'save' => route($namePrefix.'save', [$this->targetType, $this->targetId]),
                 'store' => route($namePrefix.'sections.store', [$this->targetType, $this->targetId]),

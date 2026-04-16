@@ -7,6 +7,9 @@ namespace Umutsevimcann\VisualBuilder\Domain\Services;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Database\ConnectionInterface;
+use Illuminate\Database\QueryException;
+use RuntimeException;
+use Throwable;
 
 /**
  * Global design tokens service — site-wide colors + fonts as CSS variables.
@@ -45,9 +48,21 @@ final class DesignTokenService
         $ttl = (int) $this->config->get('visual-builder.design_tokens.cache_ttl', 600);
 
         return $this->cache->remember($this->cacheKey(), $ttl, function (): array {
-            $row = $this->db->table($this->settingsTable())
-                ->where('key', $this->settingsKey())
-                ->value('value');
+            // Graceful fallback: fresh installs without the settings table
+            // (or with a DB error) should still boot the editor — we simply
+            // serve defaults. Host apps gain persistence once they provide
+            // the table.
+            if (! $this->settingsTableExists()) {
+                return $this->defaults();
+            }
+
+            try {
+                $row = $this->db->table($this->settingsTable())
+                    ->where('key', $this->settingsKey())
+                    ->value('value');
+            } catch (QueryException) {
+                return $this->defaults();
+            }
 
             if (! is_string($row) || $row === '') {
                 return $this->defaults();
@@ -68,6 +83,13 @@ final class DesignTokenService
     public function save(array $tokens): void
     {
         $clean = $this->sanitize($tokens);
+
+        if (! $this->settingsTableExists()) {
+            throw new RuntimeException(
+                "Cannot persist design tokens — settings table '{$this->settingsTable()}' does not exist. "
+                .'Create the table or point visual-builder.design_tokens.settings_table to an existing table.',
+            );
+        }
 
         $this->db->table($this->settingsTable())->updateOrInsert(
             ['key' => $this->settingsKey()],
@@ -207,5 +229,20 @@ final class DesignTokenService
     private function settingsTable(): string
     {
         return (string) $this->config->get('visual-builder.design_tokens.settings_table', 'settings');
+    }
+
+    /**
+     * Check whether the configured settings table exists on the current
+     * connection. Returns false on any schema-access failure (driver lacks
+     * introspection, transient connection error, etc.) so callers take the
+     * safe default path.
+     */
+    private function settingsTableExists(): bool
+    {
+        try {
+            return $this->db->getSchemaBuilder()->hasTable($this->settingsTable());
+        } catch (Throwable) {
+            return false;
+        }
     }
 }

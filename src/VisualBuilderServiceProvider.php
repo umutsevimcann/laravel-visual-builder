@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Umutsevimcann\VisualBuilder;
 
+use Illuminate\Support\Facades\Blade;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -45,13 +46,21 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
 {
     public function configurePackage(Package $package): void
     {
+        // Routes are NOT registered via hasRoute() — they would load with
+        // no prefix/middleware. Instead packageBooted() sets up the route
+        // group with config-driven prefix + middleware + name prefix, so
+        // host apps can customize every aspect without publishing the
+        // route file.
+        // View components are registered via Blade::componentNamespace() in
+        // packageBooted() — that method produces <x-visual-builder::editor>
+        // (double-colon) syntax, matching the documented component tag.
+        // Spatie's hasViewComponent() would register as visual-builder-editor
+        // (hyphen) which conflicts with convention.
         $package
             ->name('laravel-visual-builder')
             ->hasConfigFile('visual-builder')
             ->hasViews('visual-builder')
-            ->hasViewComponent('visual-builder', Editor::class)
             ->hasAssets()
-            ->hasRoute('web')
             ->hasMigrations([
                 'create_builder_sections_table',
                 'create_builder_revisions_table',
@@ -86,12 +95,17 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
     }
 
     /**
-     * Conditional route registration. Skips route file loading when the
-     * host app disables routes in config — they can still register their
-     * own routes pointing to package controllers.
+     * Conditional route registration + Blade component namespace.
+     * Registers <x-visual-builder::editor> via Blade::componentNamespace
+     * so the double-colon syntax matches README documentation.
      */
     public function packageBooted(): void
     {
+        Blade::componentNamespace(
+            'Umutsevimcann\\VisualBuilder\\View\\Components',
+            'visual-builder',
+        );
+
         if (config('visual-builder.routes.enabled', true) === false) {
             return;
         }
