@@ -31,6 +31,53 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.2.0] — 2026-04-16
+
+Elementor-style inline editing lands. Editor finally feels like a page
+builder instead of a forms-over-iframe split. Breaking change: none —
+existing integrations keep working, new UI activates automatically when
+the published views/assets refresh.
+
+### Added
+
+- **Inline `+` inserter between sections.** The iframe injects a
+  hoverable strip before every section wrapper (and after the last one).
+  Click opens "insert mode" — the next block-palette click on the parent
+  creates a section at that exact slot instead of appending to the end.
+- **Hover action toolbar on every section.** Four icon buttons
+  (move up, move down, duplicate, delete) float at the top-right of
+  each `.vb-section-wrap` in the preview. Up/down disable at extremes.
+  Actions hit the package's existing REST endpoints; iframe reloads
+  with the fresh state.
+- **19 built-in SVG icons.** Editor chrome (palette, save, devices,
+  undo/redo, etc.) + new inline controls (plus, copy, trash, chevrons,
+  cog). Inlined as CSS mask-image data URIs so they inherit parent
+  color and ship with no extra HTTP requests. Override any icon by
+  publishing the CSS.
+- `CreateSection::execute()` gains an optional `$afterSortOrder` param.
+  When set, reserves the slot via a single atomic UPDATE (bumps every
+  existing sort_order >= slot by +1) then creates at the free slot.
+- `BuilderController::store` accepts `after_section_id` for position-
+  aware insertion, and now returns JSON when the client asks for it.
+- `BuilderController::duplicate` now returns JSON when asked.
+
+### Fixed
+
+- The v0.1 editor shipped `<i class="vb-icon vb-icon-*">` markup with
+  no icon images — every slot rendered as a 16×16 empty box. 19 icons
+  are now baked in via the CSS sprite described above.
+
+### Tests
+
+- 50 tests (was 48). Two new feature tests cover position-aware insert
+  and cross-target fallback to append.
+
+### Upgrade notes
+
+Run `php artisan vendor:publish --tag=visual-builder-assets --force` to
+refresh the CSS/JS into `public/vendor/visual-builder/`. Views are
+unchanged. No migrations.
+
 ## [0.1.3] — 2026-04-16
 
 CI-only fix release — no runtime behavior changes. All 12 matrix cells
