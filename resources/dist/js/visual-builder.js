@@ -290,7 +290,15 @@
     // Traits panel (right) — 3 tabs
     // ─────────────────────────────────────────────────────────────
 
-    function renderTraits(sectionId) {
+    /**
+     * @param {number} sectionId
+     * @param {string|null} focusFieldKey  When provided (e.g. iframe
+     *   click on a [data-vb-editable] element), the panel auto-switches
+     *   to the Content tab, scrolls the matching field into view, and
+     *   focuses its first input. Elementor-style "click text, get that
+     *   field's editor" feedback.
+     */
+    function renderTraits(sectionId, focusFieldKey = null) {
         state.selectedSectionId = sectionId;
         const section = findSection(sectionId);
         const container = document.querySelector('[data-vb-traits]');
@@ -302,7 +310,12 @@
             return;
         }
 
+        // If the user clicked a specific field in the preview, force the
+        // Content tab — no point showing Style controls when they wanted
+        // to edit text.
+        if (focusFieldKey) state.activeTab = 'content';
         const activeTab = state.activeTab;
+
         const html = [
             '<div class="vb-section-header">',
             '<div class="vb-section-header-icon" aria-hidden="true"></div>',
@@ -334,6 +347,22 @@
         bindSectionActions(container, section);
 
         postToIframe({ type: 'highlight-section', sectionId: section.id });
+
+        // Scroll + focus requested field. Deferred until after layout so
+        // scrollIntoView/focus target has final geometry.
+        if (focusFieldKey) {
+            requestAnimationFrame(() => focusTraitsField(container, focusFieldKey));
+        }
+    }
+
+    function focusTraitsField(container, fieldKey) {
+        const group = container.querySelector('[data-vb-field="' + CSS.escape(fieldKey) + '"]');
+        if (!group) return;
+        group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        group.classList.add('vb-field-focused');
+        setTimeout(() => group.classList.remove('vb-field-focused'), 1500);
+        const input = group.querySelector('input, textarea, select');
+        if (input) input.focus();
     }
 
     function renderTabButton(key, label, activeTab) {
@@ -732,6 +761,35 @@
         });
     }
 
+    /**
+     * Commit an inline contenteditable change from the iframe. Mirrors
+     * what handleInputChange does for a traits-panel input, but sourced
+     * from the iframe's blur/Enter event rather than a form element.
+     * Re-renders the traits panel so if the same field is visible there,
+     * the input reflects the new value after the user closes/reopens
+     * the section.
+     */
+    function handleInlineEdit(sectionId, fieldKey, locale, value) {
+        const section = findSection(sectionId);
+        if (!section || !fieldKey) return;
+
+        applyPendingChange(sectionId, s => {
+            ensurePath(s, ['content']);
+            if (locale) {
+                if (typeof s.content[fieldKey] !== 'object' || Array.isArray(s.content[fieldKey])) {
+                    s.content[fieldKey] = {};
+                }
+                s.content[fieldKey][locale] = value;
+            } else {
+                s.content[fieldKey] = value;
+            }
+        });
+
+        if (state.selectedSectionId === sectionId) {
+            renderTraits(sectionId, fieldKey);
+        }
+    }
+
     function handleInputChange(section, input) {
         const key = input.getAttribute('data-vb-input');
         const locale = input.getAttribute('data-vb-locale');
@@ -967,14 +1025,25 @@
                     break;
                 }
                 case 'section-clicked':
-                case 'field-focused':
                     renderTraits(msg.sectionId);
+                    break;
+                case 'field-focused':
+                    // Pass the field key so the traits panel auto-opens
+                    // Content tab + scrolls + focuses that specific input.
+                    renderTraits(msg.sectionId, msg.fieldKey);
                     break;
                 case 'insert-requested':
                     // Iframe `+` inserter clicked → enter "insert mode".
                     // The next block-palette click will create a section
                     // right after `msg.afterSectionId` (null = prepend).
                     enterInsertMode(msg.afterSectionId);
+                    break;
+                case 'inline-edit':
+                    // User double-clicked text in the iframe and committed
+                    // a change (blur / Enter). Mirror the edit into pending
+                    // state so Save flushes it, and refresh the traits
+                    // panel if this section is currently selected.
+                    handleInlineEdit(msg.sectionId, msg.fieldKey, msg.locale, msg.value);
                     break;
                 case 'duplicate-section':
                     duplicateSection(msg.sectionId);

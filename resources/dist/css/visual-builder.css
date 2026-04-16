@@ -505,6 +505,18 @@
 
 .vb-field {
     margin-bottom: 14px;
+    border-radius: 4px;
+    transition: background-color 200ms ease, box-shadow 200ms ease;
+}
+
+/* Transient highlight when a field is clicked from the preview iframe —
+   helps the editor locate the right input in a long panel. */
+.vb-field.vb-field-focused {
+    background-color: rgba(37, 99, 235, 0.08);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+    padding: 4px;
+    margin-left: -4px;
+    margin-right: -4px;
 }
 
 .vb-field-label {

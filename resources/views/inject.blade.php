@@ -96,6 +96,17 @@
         outline: 2px solid #10b981 !important;
     }
 
+    /* Inline contenteditable mode — clear visual cue that the element is
+       being edited in place. Different color from hover/selected so the
+       editor can see they're in "typing" mode, not just highlighted. */
+    body.vb-builder-active [data-vb-editable].vb-element-editing {
+        outline: 2px dashed #f59e0b !important;
+        outline-offset: 2px;
+        background-color: rgba(245, 158, 11, 0.06) !important;
+        cursor: text !important;
+        caret-color: #000;
+    }
+
     body.vb-builder-active [data-vb-editable]::after {
         content: attr(data-vb-field);
         position: absolute;
@@ -332,6 +343,68 @@
             sectionType: wrap.getAttribute('data-vb-section-type'),
         }, allowedOrigin);
     }, true);
+
+    /**
+     * Inline contenteditable on double-click. Elementor-style "edit text
+     * in place": dblclick a [data-vb-editable] → it becomes editable,
+     * on blur the new text is posted to the parent which queues a save.
+     *
+     * Skips [data-vb-html="1"] elements — those are rich-text (WYSIWYG)
+     * fields that belong in the traits panel's HTML editor, not raw
+     * contenteditable (would strip intended markup).
+     */
+    document.addEventListener('dblclick', function (e) {
+        const target = e.target.closest('[data-vb-editable]');
+        if (!target || target.hasAttribute('data-vb-html')) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (target.isContentEditable) return;
+
+        const originalText = target.textContent;
+        target.setAttribute('contenteditable', 'true');
+        target.classList.add('vb-element-editing');
+        target.focus();
+
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        const commit = function () {
+            target.removeAttribute('contenteditable');
+            target.classList.remove('vb-element-editing');
+            target.removeEventListener('blur', commit);
+            target.removeEventListener('keydown', keyHandler);
+
+            const newText = target.textContent;
+            if (newText === originalText) return;
+
+            window.parent.postMessage({
+                source: 'vb-iframe',
+                type: 'inline-edit',
+                sectionId: parseInt(target.getAttribute('data-vb-section-id'), 10),
+                fieldKey: target.getAttribute('data-vb-field'),
+                locale: target.getAttribute('data-vb-locale'),
+                value: newText,
+            }, allowedOrigin);
+        };
+
+        const keyHandler = function (ev) {
+            if (ev.key === 'Escape') {
+                target.textContent = originalText;
+                target.blur();
+            } else if (ev.key === 'Enter' && !ev.shiftKey) {
+                ev.preventDefault();
+                target.blur();
+            }
+        };
+
+        target.addEventListener('blur', commit);
+        target.addEventListener('keydown', keyHandler);
+    });
 
     /**
      * Right-click context menu — forwarded to parent, which renders its
