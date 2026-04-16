@@ -1155,6 +1155,38 @@
         bindToolbar();
         initIframeMessaging();
 
+        // Belt-and-suspenders loading overlay dismissal: the iframe posts
+        // a 'loaded' message to the parent when its DOM is ready, but if
+        // the iframe loads before this parent listener is wired (common
+        // on the very first page load), that message is missed and the
+        // overlay hangs forever until the user clicks "Reload Preview".
+        //
+        // The browser's native `load` event fires for every iframe src
+        // change (initial load + every reloadIframe() call), so use it
+        // as a fallback. A short delay gives the inject script time to
+        // register its handlers inside the iframe before we reveal.
+        if (state.iframe) {
+            state.iframe.addEventListener('load', function () {
+                setTimeout(function () {
+                    state.iframeReady = true;
+                    const loading = document.querySelector('[data-vb-loading]');
+                    if (loading) loading.classList.add('vb-hidden');
+                }, 150);
+            });
+
+            // If iframe was ALREADY loaded by the time parent JS ran, its
+            // 'load' event has already fired and won't fire again. Check
+            // readyState and dismiss immediately in that race.
+            const iframeDoc = state.iframe.contentDocument;
+            if (iframeDoc && iframeDoc.readyState === 'complete') {
+                setTimeout(function () {
+                    state.iframeReady = true;
+                    const loading = document.querySelector('[data-vb-loading]');
+                    if (loading) loading.classList.add('vb-hidden');
+                }, 150);
+            }
+        }
+
         window.VBuilder = { state, save, renderTraits };
     }
 
