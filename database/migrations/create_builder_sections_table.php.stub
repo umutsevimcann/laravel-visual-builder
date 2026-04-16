@@ -1,0 +1,71 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $table = (string) config('visual-builder.tables.sections', 'builder_sections');
+
+        Schema::create($table, static function (Blueprint $table): void {
+            $table->id();
+
+            // Polymorphic owner — the page/post/product this section belongs to.
+            // The morphs() helper creates both columns plus a composite index.
+            $table->morphs('builder');
+
+            // Section type key from SectionTypeRegistry (e.g. 'hero', 'faq').
+            // Not a foreign key — the registry is code-defined, not table-backed.
+            $table->string('type', 60);
+
+            // Distinguishes multiple instances of the same type on one target.
+            // Singleton types use '__default__'. Multi-instance types get
+            // auto-generated or user-supplied keys.
+            $table->string('instance_key', 60)->default('__default__');
+
+            // Translatable content + style override JSON. Schemas vary per
+            // section type — the Action layer validates shape at write time.
+            $table->json('content')->nullable();
+            $table->json('style')->nullable();
+
+            // Publish flag — false means draft; editors see it, public does not.
+            $table->boolean('is_published')->default(true);
+
+            // Drag-reorder index within the target's section list.
+            $table->integer('sort_order')->default(0);
+
+            // Optional scheduling window — section auto-shows/hides on dates.
+            $table->timestamp('starts_at')->nullable();
+            $table->timestamp('ends_at')->nullable();
+
+            $table->timestamps();
+
+            // Composite index for the most common frontend query:
+            //   WHERE builder_type = ? AND builder_id = ?
+            //     AND is_published = true
+            //   ORDER BY sort_order
+            $table->index(
+                ['builder_type', 'builder_id', 'is_published', 'sort_order'],
+                $table->getTable() . '_lookup_idx',
+            );
+
+            // Unique constraint for the singleton-type invariant:
+            // only one default-instance of a given type per target.
+            $table->unique(
+                ['builder_type', 'builder_id', 'type', 'instance_key'],
+                $table->getTable() . '_instance_unique',
+            );
+        });
+    }
+
+    public function down(): void
+    {
+        $table = (string) config('visual-builder.tables.sections', 'builder_sections');
+        Schema::dropIfExists($table);
+    }
+};

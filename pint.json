@@ -33,7 +33,6 @@
             "sort_algorithm": "alpha"
         },
         "phpdoc_to_comment": false,
-        "static_lambda": true,
         "strict_comparison": true,
         "strict_param": true
     }

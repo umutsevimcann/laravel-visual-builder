@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Umutsevimcann\VisualBuilder\Infrastructure\Media;
 
 use Illuminate\Contracts\Filesystem\Factory as FilesystemFactory;
+use Illuminate\Contracts\Filesystem\Filesystem;
+use Illuminate\Filesystem\FilesystemAdapter;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use Umutsevimcann\VisualBuilder\Contracts\MediaServiceInterface;
@@ -81,7 +83,21 @@ final class StorageMediaService implements MediaServiceInterface
             return asset($path);
         }
 
-        return $this->storage->disk($this->diskName())->url($path);
+        $disk = $this->storage->disk($this->diskName());
+
+        // The base Filesystem contract doesn't declare url() — that method
+        // lives on FilesystemAdapter (returned by every first-party Laravel
+        // disk driver). Runtime type guard keeps static analysis clean AND
+        // gives a graceful fallback for exotic user-bound drivers.
+        if ($disk instanceof FilesystemAdapter) {
+            return $disk->url($path);
+        }
+
+        if ($disk instanceof Filesystem && method_exists($disk, 'url')) {
+            return (string) $disk->url($path);
+        }
+
+        return '/'.ltrim($path, '/');
     }
 
     private function diskName(): string

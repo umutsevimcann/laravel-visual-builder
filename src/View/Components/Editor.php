@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Umutsevimcann\VisualBuilder\View\Components;
 
-use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -46,7 +45,7 @@ final class Editor extends Component
         $this->targetId = (int) $target->getKey();
     }
 
-    public function render(): View|Htmlable|string
+    public function render(): View
     {
         /** @var SectionTypeRegistry $registry */
         $registry = app(SectionTypeRegistry::class);

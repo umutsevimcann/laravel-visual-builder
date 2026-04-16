@@ -13,8 +13,11 @@ parameters:
     excludePaths:
         - config/visual-builder.php
 
-    # Ignore Laravel magic that static analysis cannot resolve without a
-    # full app context (Facades, helper globals, ServiceProvider resolution).
+    # Traits are analysed via their using classes. In a standalone package
+    # with no host app, traits (HasVisualBuilder) appear unused until a
+    # consumer class uses them — this rule pattern silences only that
+    # specific message.
     ignoreErrors:
-        # `config()` helper inside package returns mixed; we downcast at call sites.
-        - '#Parameter \#1 \$config of (function|method) .* expects array, mixed given#'
+        -
+            message: '#is used zero times and is not analysed#'
+            identifier: trait.unused

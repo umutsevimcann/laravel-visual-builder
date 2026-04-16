@@ -1,0 +1,50 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $table = (string) config('visual-builder.tables.revisions', 'builder_revisions');
+
+        Schema::create($table, static function (Blueprint $table): void {
+            $table->id();
+
+            // Polymorphic owner — the buildable target whose state is snapshotted.
+            $table->morphs('builder');
+
+            // Who triggered the save. Nullable so unauthenticated/system saves
+            // (automated imports, migration tools) also record revisions.
+            $table->unsignedBigInteger('user_id')->nullable();
+
+            // Optional human-readable label — "Manual save", "Imported from v1",
+            // "Pre-launch baseline", etc. Appears in the revisions UI.
+            $table->string('label', 100)->nullable();
+
+            // Complete state snapshot of all sections for this target at the
+            // time the revision was captured. Shape: array of section payloads
+            // (content, style, is_published, sort_order). Restore copies this
+            // back to the live sections row-by-row.
+            $table->json('snapshot');
+
+            $table->timestamps();
+
+            // Secondary index — list-by-target ordered by recency.
+            $table->index(
+                ['builder_type', 'builder_id', 'created_at'],
+                $table->getTable() . '_timeline_idx',
+            );
+        });
+    }
+
+    public function down(): void
+    {
+        $table = (string) config('visual-builder.tables.revisions', 'builder_revisions');
+        Schema::dropIfExists($table);
+    }
+};

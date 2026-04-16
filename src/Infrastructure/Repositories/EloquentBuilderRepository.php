@@ -31,8 +31,12 @@ final class EloquentBuilderRepository implements BuilderRepositoryInterface
         return BuilderSection::query()->find($id);
     }
 
+    /**
+     * @return Collection<int, BuilderSection>
+     */
     public function forTarget(Model $target): Collection
     {
+        /** @var Collection<int, BuilderSection> */
         return BuilderSection::query()
             ->where('builder_type', $target->getMorphClass())
             ->where('builder_id', $target->getKey())
@@ -40,10 +44,14 @@ final class EloquentBuilderRepository implements BuilderRepositoryInterface
             ->get();
     }
 
+    /**
+     * @return Collection<int, BuilderSection>
+     */
     public function visibleForTarget(Model $target): Collection
     {
         $now = Carbon::now();
 
+        /** @var Collection<int, BuilderSection> */
         return BuilderSection::query()
             ->where('builder_type', $target->getMorphClass())
             ->where('builder_id', $target->getKey())
