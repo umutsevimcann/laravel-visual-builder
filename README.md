@@ -2,7 +2,7 @@
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/umutsevimcann/laravel-visual-builder.svg?style=flat-square)](https://packagist.org/packages/umutsevimcann/laravel-visual-builder)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/umutsevimcann/laravel-visual-builder/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/umutsevimcann/laravel-visual-builder/actions/workflows/run-tests.yml)
-[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/umutsevimcann/laravel-visual-builder/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/umutsevimcann/laravel-visual-builder/actions/workflows/fix-php-code-style-issues.yml)
+[![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/umutsevimcann/laravel-visual-builder/code-style.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/umutsevimcann/laravel-visual-builder/actions/workflows/code-style.yml)
 [![Codecov](https://img.shields.io/codecov/c/github/umutsevimcann/laravel-visual-builder?style=flat-square&token=)](https://codecov.io/gh/umutsevimcann/laravel-visual-builder)
 [![Total Downloads](https://img.shields.io/packagist/dt/umutsevimcann/laravel-visual-builder.svg?style=flat-square)](https://packagist.org/packages/umutsevimcann/laravel-visual-builder)
 [![License](https://img.shields.io/packagist/l/umutsevimcann/laravel-visual-builder.svg?style=flat-square)](LICENSE.md)
@@ -233,7 +233,7 @@ Please see [CHANGELOG](CHANGELOG.md) for recent changes.
 
 ## Contributing
 
-Pull requests welcome. Please make sure tests pass and code style matches:
+Pull requests welcome. CI runs Pint in `--test` mode — style issues fail the build instead of being auto-fixed. Run `composer format` locally before pushing:
 
 ```bash
 composer test && composer format
