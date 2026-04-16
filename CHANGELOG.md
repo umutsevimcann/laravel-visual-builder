@@ -31,6 +31,39 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.2.5] — 2026-04-17
+
+### Changed
+
+- **Site Settings → Fonts now uses a dropdown instead of a text input.**
+  Previously heading/body font-family had to be typed by hand (e.g.
+  `'Roboto', sans-serif`). Dropdown now lists 19 popular presets
+  (Roboto, Open Sans, Lato, Montserrat, Poppins, Inter, Playfair
+  Display, Merriweather, Georgia, Arial, Helvetica, Courier New, …)
+  with each option rendered in its own face so users can preview.
+  A `Custom…` option reveals the original text input for stacks
+  outside the preset list. Colors already used the browser's native
+  `<input type="color">` picker.
+
+## [0.2.4] — 2026-04-17
+
+### Fixed
+
+- **Top toolbar buttons (palette / list / clock) now wired.** `handleToolbar`
+  previously only knew `save` and `reload`; the three left-toolbar icons had
+  no JS handlers. Site Settings opens the global tokens modal, Navigator
+  toggles a section-tree sidebar, Revisions shows a v0.4 placeholder.
+
+## [0.2.3] — 2026-04-17
+
+### Fixed
+
+- **Initial iframe loading overlay no longer hangs.** Race condition where
+  the `preview-ready` postMessage from the iframe could fire before the
+  editor attached its listener, leaving the grey "Loading preview…" curtain
+  up forever. Added a native `iframe.addEventListener('load', …)` fallback
+  that dismisses the overlay even if postMessage never arrives.
+
 ## [0.2.2] — 2026-04-16
 
 ### Fixed

@@ -1181,17 +1181,61 @@
             );
         });
         parts.push('</div><div class="vb-group"><div class="vb-group-title">Fonts</div>');
+        const FONT_PRESETS = [
+            { label: 'System UI', value: 'system-ui, -apple-system, sans-serif' },
+            { label: 'Roboto', value: "'Roboto', sans-serif" },
+            { label: 'Open Sans', value: "'Open Sans', sans-serif" },
+            { label: 'Lato', value: "'Lato', sans-serif" },
+            { label: 'Montserrat', value: "'Montserrat', sans-serif" },
+            { label: 'Poppins', value: "'Poppins', sans-serif" },
+            { label: 'Inter', value: "'Inter', sans-serif" },
+            { label: 'Nunito', value: "'Nunito', sans-serif" },
+            { label: 'Raleway', value: "'Raleway', sans-serif" },
+            { label: 'Oswald', value: "'Oswald', sans-serif" },
+            { label: 'Source Sans 3', value: "'Source Sans 3', sans-serif" },
+            { label: 'Playfair Display', value: "'Playfair Display', serif" },
+            { label: 'Merriweather', value: "'Merriweather', serif" },
+            { label: 'Lora', value: "'Lora', serif" },
+            { label: 'Georgia', value: 'Georgia, serif' },
+            { label: 'Times New Roman', value: "'Times New Roman', serif" },
+            { label: 'Arial', value: 'Arial, sans-serif' },
+            { label: 'Helvetica', value: "'Helvetica Neue', Helvetica, sans-serif" },
+            { label: 'Courier New', value: "'Courier New', monospace" },
+        ];
         (tokens.fonts || []).forEach((f, idx) => {
+            const currentValue = f.family || '';
+            const isPreset = FONT_PRESETS.some(p => p.value === currentValue);
+            const optionsHtml = FONT_PRESETS.map(p =>
+                '<option value="' + escapeHtml(p.value) + '" style="font-family:' + escapeHtml(p.value) + '"'
+                + (p.value === currentValue ? ' selected' : '') + '>' + escapeHtml(p.label) + '</option>'
+            ).join('')
+            + '<option value="__custom__"' + (isPreset ? '' : ' selected') + '>Custom…</option>';
+
             parts.push(
                 '<div class="vb-field">',
                 '<label class="vb-field-label"><span>', escapeHtml(f.label), '</span><code style="font-size:10px;color:#6b7280">', escapeHtml(f.id), '</code></label>',
-                '<input type="text" class="vb-field-input" value="', escapeHtml(f.family), '" data-vb-token-font-family="', idx, '" placeholder="\'Roboto\', sans-serif">',
+                '<select class="vb-field-input" data-vb-token-font-select="', idx, '" style="font-family:', escapeHtml(currentValue), '">', optionsHtml, '</select>',
+                '<input type="text" class="vb-field-input" value="', escapeHtml(currentValue), '" data-vb-token-font-family="', idx, '" placeholder="\'Roboto\', sans-serif" style="margin-top:6px;', (isPreset ? 'display:none' : ''), '">',
                 '</div>',
             );
         });
         parts.push('</div>');
 
         setHtml(body, parts.join(''));
+
+        // Font dropdown → syncs to hidden text input that save logic reads
+        body.querySelectorAll('[data-vb-token-font-select]').forEach(function (sel) {
+            const idx = sel.getAttribute('data-vb-token-font-select');
+            const textInput = body.querySelector('[data-vb-token-font-family="' + idx + '"]');
+            sel.addEventListener('change', function () {
+                if (sel.value === '__custom__') {
+                    if (textInput) { textInput.style.display = ''; textInput.focus(); }
+                } else {
+                    if (textInput) { textInput.value = sel.value; textInput.style.display = 'none'; }
+                    sel.style.fontFamily = sel.value;
+                }
+            });
+        });
 
         // Save button
         const saveBtn = modal.querySelector('[data-vb-site-settings-save]');
