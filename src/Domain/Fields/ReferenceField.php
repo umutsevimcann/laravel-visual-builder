@@ -39,10 +39,10 @@ final class ReferenceField extends FieldDefinition
         string $key,
         string $label,
         public readonly Closure $optionsResolver,
-        ?string $help = null,
+        null|string $help = null,
         bool $required = false,
         public readonly bool $multiple = true,
-        public readonly ?int $maxItems = null,
+        public readonly null|int $maxItems = null,
         bool $toggleable = true,
     ) {
         parent::__construct(

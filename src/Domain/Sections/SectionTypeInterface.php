@@ -58,7 +58,7 @@ interface SectionTypeInterface
      * Optional preview thumbnail asset path (relative to public/ or a full URL).
      * Null means fall back to the icon.
      */
-    public function previewImage(): ?string;
+    public function previewImage(): null|string;
 
     /**
      * Ordered list of field definitions making up this section's schema.

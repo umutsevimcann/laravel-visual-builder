@@ -29,10 +29,10 @@ interface AuthorizationInterface
     /**
      * Determine whether the current user may perform an action on a target.
      *
-     * @param  string      $ability  Semantic action name: view, edit, delete, publish, etc.
-     * @param  Model|null  $target   The model being acted upon (the builder's parent page,
-     *                               post, product, etc.) or null for type-wide checks.
-     * @return bool                  True if authorized, false to deny.
+     * @param  string  $ability  Semantic action name: view, edit, delete, publish, etc.
+     * @param  Model|null  $target  The model being acted upon (the builder's parent page,
+     *                              post, product, etc.) or null for type-wide checks.
+     * @return bool True if authorized, false to deny.
      */
-    public function check(string $ability, ?Model $target = null): bool;
+    public function check(string $ability, null|Model $target = null): bool;
 }

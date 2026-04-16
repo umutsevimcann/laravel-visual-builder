@@ -22,14 +22,14 @@ use Illuminate\Support\Carbon;
  * editor's browser via localStorage — fast, zero database footprint, but
  * lost when cache is cleared or on another device.
  *
- * @property int         $id
- * @property int         $builder_id
- * @property string      $builder_type
- * @property int|null    $user_id
+ * @property int $id
+ * @property int $builder_id
+ * @property string $builder_type
+ * @property int|null $user_id
  * @property string|null $label
- * @property array       $snapshot
- * @property Carbon      $created_at
- * @property Carbon      $updated_at
+ * @property array $snapshot
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class BuilderRevision extends Model
 {

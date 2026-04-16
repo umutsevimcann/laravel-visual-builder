@@ -29,8 +29,6 @@ use RuntimeException;
  * Double registration of the same key throws — catches copy-paste errors
  * early. Use has() to probe before registering if you must allow idempotent
  * boot cycles (hot reloads, etc.).
- *
- * @final For stability — extend by composition, not inheritance.
  */
 final class SectionTypeRegistry
 {
@@ -60,7 +58,7 @@ final class SectionTypeRegistry
     /**
      * Find a registered type by key; null if not found.
      */
-    public function find(string $key): ?SectionTypeInterface
+    public function find(string $key): null|SectionTypeInterface
     {
         return $this->types[$key] ?? null;
     }

@@ -24,9 +24,9 @@ interface BuilderRepositoryInterface
      * Find a single section by primary key.
      *
      * @param  int  $id  BuilderSection primary key.
-     * @return BuilderSection|null  The section or null if not found.
+     * @return BuilderSection|null The section or null if not found.
      */
-    public function find(int $id): ?BuilderSection;
+    public function find(int $id): null|BuilderSection;
 
     /**
      * Retrieve all sections for the given buildable model, ordered by sort_order.
@@ -57,12 +57,11 @@ interface BuilderRepositoryInterface
      * exists per target. Multi-instance types distinguish siblings via the
      * instance_key column.
      *
-     * @param  Model   $target        Any model using the HasVisualBuilder trait.
-     * @param  string  $type          Section type key (e.g. 'hero').
-     * @param  string  $instanceKey   Instance identifier; defaults to '__default__'.
-     * @return BuilderSection|null
+     * @param  Model  $target  Any model using the HasVisualBuilder trait.
+     * @param  string  $type  Section type key (e.g. 'hero').
+     * @param  string  $instanceKey  Instance identifier; defaults to '__default__'.
      */
-    public function findByTypeInstance(Model $target, string $type, string $instanceKey = '__default__'): ?BuilderSection;
+    public function findByTypeInstance(Model $target, string $type, string $instanceKey = '__default__'): null|BuilderSection;
 
     /**
      * Persist a brand-new section.

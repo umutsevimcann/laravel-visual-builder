@@ -21,9 +21,9 @@ final class HtmlField extends FieldDefinition
     public function __construct(
         string $key,
         string $label,
-        ?string $help = null,
+        null|string $help = null,
         bool $required = false,
-        ?string $placeholder = null,
+        null|string $placeholder = null,
         bool $toggleable = true,
     ) {
         parent::__construct(

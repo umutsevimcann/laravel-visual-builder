@@ -31,19 +31,19 @@ use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
  *  - "_visibility":       per-field show/hide map (eye icon state)
  *  - "_element_styles":   per-field inline style overrides (color, font, etc.)
  *
- * @property int         $id
- * @property int         $builder_id
- * @property string      $builder_type
- * @property string      $type
- * @property string      $instance_key
- * @property bool        $is_published
- * @property int         $sort_order
- * @property array|null  $content
- * @property array|null  $style
+ * @property int $id
+ * @property int $builder_id
+ * @property string $builder_type
+ * @property string $type
+ * @property string $instance_key
+ * @property bool $is_published
+ * @property int $sort_order
+ * @property array|null $content
+ * @property array|null $style
  * @property Carbon|null $starts_at
  * @property Carbon|null $ends_at
- * @property Carbon      $created_at
- * @property Carbon      $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class BuilderSection extends Model
 {
@@ -99,7 +99,7 @@ class BuilderSection extends Model
      * Visibility = is_published flag AND (now is within scheduling window
      * OR no window defined).
      */
-    public function isVisibleNow(?Carbon $now = null): bool
+    public function isVisibleNow(null|Carbon $now = null): bool
     {
         if (! $this->is_published) {
             return false;
@@ -127,11 +127,11 @@ class BuilderSection extends Model
      *  - Locale map → returns the requested locale, falling back to the
      *    configured fallback locale, then an empty string.
      *
-     * @param  string       $key     Field key defined by a SectionType field.
+     * @param  string  $key  Field key defined by a SectionType field.
      * @param  string|null  $locale  Specific locale; null uses the current app locale.
-     * @return mixed                 Scalar for non-translatable; string for translatable.
+     * @return mixed Scalar for non-translatable; string for translatable.
      */
-    public function contentField(string $key, ?string $locale = null): mixed
+    public function contentField(string $key, null|string $locale = null): mixed
     {
         $content = $this->content ?? [];
         $value = $content[$key] ?? null;

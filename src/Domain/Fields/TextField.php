@@ -22,10 +22,10 @@ final class TextField extends FieldDefinition
     public function __construct(
         string $key,
         string $label,
-        ?string $help = null,
+        null|string $help = null,
         bool $required = false,
         bool $translatable = false,
-        ?string $placeholder = null,
+        null|string $placeholder = null,
         public readonly int $maxLength = 255,
         bool $toggleable = true,
     ) {

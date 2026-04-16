@@ -21,8 +21,8 @@ final class SectionsReordered
     use SerializesModels;
 
     /**
-     * @param  Model            $target       The buildable model whose sections were reordered.
-     * @param  array<int, int>  $orderedIds   Section IDs in their new order.
+     * @param  Model  $target  The buildable model whose sections were reordered.
+     * @param  array<int, int>  $orderedIds  Section IDs in their new order.
      */
     public function __construct(
         public readonly Model $target,

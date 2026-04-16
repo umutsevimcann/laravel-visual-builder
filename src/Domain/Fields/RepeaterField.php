@@ -35,14 +35,14 @@ final class RepeaterField extends FieldDefinition
 {
     /**
      * @param  array<int, FieldDefinition>  $itemFields  Sub-field definitions rendered inside each item.
-     * @param  int   $minItems  Minimum items; 0 means the repeater may be empty.
-     * @param  int   $maxItems  Maximum items; 0 means unlimited.
+     * @param  int  $minItems  Minimum items; 0 means the repeater may be empty.
+     * @param  int  $maxItems  Maximum items; 0 means unlimited.
      */
     public function __construct(
         string $key,
         string $label,
         public readonly array $itemFields,
-        ?string $help = null,
+        null|string $help = null,
         public readonly int $minItems = 0,
         public readonly int $maxItems = 0,
         bool $toggleable = true,

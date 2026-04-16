@@ -23,9 +23,9 @@ final class ImageField extends FieldDefinition
     public function __construct(
         string $key,
         string $label,
-        ?string $help = null,
+        null|string $help = null,
         bool $required = false,
-        public readonly ?string $defaultAsset = null,
+        public readonly null|string $defaultAsset = null,
         bool $toggleable = true,
     ) {
         parent::__construct(

@@ -31,21 +31,21 @@ namespace Umutsevimcann\VisualBuilder\Domain\Fields;
 abstract class FieldDefinition
 {
     /**
-     * @param  string        $key          Storage key in content JSON (snake_case).
-     * @param  string        $label        Human-readable label shown above the input.
-     * @param  string|null   $help         Optional help text displayed under the label.
-     * @param  bool          $required     Whether this field must be present on save.
-     * @param  bool          $translatable Whether value is a locale-map {en:"...", de:"..."}.
-     * @param  string|null   $placeholder  Placeholder shown inside the empty input.
-     * @param  bool          $toggleable   Whether the field has an individual show/hide eye icon.
+     * @param  string  $key  Storage key in content JSON (snake_case).
+     * @param  string  $label  Human-readable label shown above the input.
+     * @param  string|null  $help  Optional help text displayed under the label.
+     * @param  bool  $required  Whether this field must be present on save.
+     * @param  bool  $translatable  Whether value is a locale-map {en:"...", de:"..."}.
+     * @param  string|null  $placeholder  Placeholder shown inside the empty input.
+     * @param  bool  $toggleable  Whether the field has an individual show/hide eye icon.
      */
     public function __construct(
         public readonly string $key,
         public readonly string $label,
-        public readonly ?string $help = null,
+        public readonly null|string $help = null,
         public readonly bool $required = false,
         public readonly bool $translatable = false,
-        public readonly ?string $placeholder = null,
+        public readonly null|string $placeholder = null,
         public readonly bool $toggleable = true,
     ) {}
 
@@ -80,7 +80,7 @@ abstract class FieldDefinition
      * to bool, SelectField enforces a whitelist of valid options.
      *
      * @param  mixed  $value  Raw value from the request.
-     * @return mixed          Cleaned value safe to persist.
+     * @return mixed Cleaned value safe to persist.
      */
     public function sanitize(mixed $value): mixed
     {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Umutsevimcann\VisualBuilder\Support\Concerns;
 
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
 use Umutsevimcann\VisualBuilder\Domain\Models\BuilderRevision;
@@ -29,7 +30,7 @@ use Umutsevimcann\VisualBuilder\Domain\Models\BuilderSection;
  * And a helper method:
  *  - visibleBuilderSections() — only sections that pass isVisibleNow()
  *
- * @mixin \Illuminate\Database\Eloquent\Model
+ * @mixin Model
  */
 trait HasVisualBuilder
 {

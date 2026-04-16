@@ -27,9 +27,9 @@ final class SelectField extends FieldDefinition
         string $key,
         string $label,
         public readonly array $options,
-        ?string $help = null,
+        null|string $help = null,
         bool $required = false,
-        public readonly ?string $defaultValue = null,
+        public readonly null|string $defaultValue = null,
         bool $toggleable = true,
     ) {
         parent::__construct(

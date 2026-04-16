@@ -22,7 +22,7 @@ final class LinkField extends FieldDefinition
     public function __construct(
         string $key,
         string $label,
-        ?string $help = null,
+        null|string $help = null,
         bool $required = false,
         public readonly bool $withLabel = true,
         bool $toggleable = true,

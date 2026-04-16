@@ -31,7 +31,7 @@ final class GateAuthorization implements AuthorizationInterface
         private readonly Gate $gate,
     ) {}
 
-    public function check(string $ability, ?Model $target = null): bool
+    public function check(string $ability, null|Model $target = null): bool
     {
         $gateName = config('visual-builder.authorization_gate');
 

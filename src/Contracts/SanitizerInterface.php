@@ -35,7 +35,7 @@ interface SanitizerInterface
      * Empty and non-string inputs should return an empty string, not null.
      *
      * @param  string  $html  Untrusted HTML input.
-     * @return string         Sanitized HTML safe for rendering.
+     * @return string Sanitized HTML safe for rendering.
      */
     public function purify(string $html): string;
 }

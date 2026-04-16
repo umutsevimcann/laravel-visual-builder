@@ -17,7 +17,7 @@ final class ToggleField extends FieldDefinition
     public function __construct(
         string $key,
         string $label,
-        ?string $help = null,
+        null|string $help = null,
         public readonly bool $defaultValue = true,
     ) {
         parent::__construct(

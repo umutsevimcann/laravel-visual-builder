@@ -29,9 +29,9 @@ interface MediaServiceInterface
     /**
      * Persist an uploaded file and return the storage path.
      *
-     * @param  UploadedFile  $file       The PHP upload (already validated by the caller).
-     * @param  string        $directory  Sub-directory hint within the implementation's base location.
-     * @return string                    Storage path (e.g. `visual-builder/abc123.jpg`).
+     * @param  UploadedFile  $file  The PHP upload (already validated by the caller).
+     * @param  string  $directory  Sub-directory hint within the implementation's base location.
+     * @return string Storage path (e.g. `visual-builder/abc123.jpg`).
      */
     public function upload(UploadedFile $file, string $directory = ''): string;
 
@@ -42,7 +42,7 @@ interface MediaServiceInterface
      * on idempotent behavior when cleaning up orphaned references.
      *
      * @param  string  $path  Storage path returned by a previous upload().
-     * @return bool           True on successful delete, false otherwise.
+     * @return bool True on successful delete, false otherwise.
      */
     public function delete(string $path): bool;
 
@@ -54,7 +54,7 @@ interface MediaServiceInterface
      * should handle all three gracefully.
      *
      * @param  string  $path  Storage path, asset path, or absolute URL.
-     * @return string         Browser-accessible URL.
+     * @return string Browser-accessible URL.
      */
     public function url(string $path): string;
 }
