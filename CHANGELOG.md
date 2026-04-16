@@ -31,6 +31,34 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.2.1] — 2026-04-16
+
+Real-use feedback on v0.2.0 exposed a UX gap: editors clicked on text
+in the preview and nothing useful happened. This patch turns clicks and
+double-clicks on preview elements into first-class editing moves.
+
+### Added
+
+- **Click-to-focus in traits panel.** Clicking a `[data-vb-editable]`
+  element in the iframe now forces the Content tab active, scrolls the
+  matching field group into view, adds a transient blue halo, and
+  focuses the first input. No more "I clicked, nothing happened."
+- **Inline contenteditable.** Double-click any non-HTML editable
+  element in the preview → it becomes contenteditable with a dashed
+  amber outline. Type to edit, blur or Enter to commit, Escape to
+  revert. Changes flush through the same Save pipeline as traits-panel
+  inputs.
+- `renderTraits(sectionId, focusFieldKey)` accepts an optional second
+  arg; iframe's `field-focused` message forwards the clicked field key.
+
+### Not in this release (v0.3 roadmap)
+
+- Per-device (responsive) style values. The device toolbar (desktop /
+  tablet / mobile) currently only swaps iframe width. Real per-device
+  values need content/style JSON to carry `{desktop, tablet, mobile}`
+  maps — a breaking data change deferred to a minor.
+- Drag-drop section reorder. Toolbar up/down arrows cover the need.
+
 ## [0.2.0] — 2026-04-16
 
 Elementor-style inline editing lands. Editor finally feels like a page
