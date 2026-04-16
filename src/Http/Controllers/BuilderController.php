@@ -197,16 +197,26 @@ final class BuilderController extends BaseController
 
     /**
      * Guard: ensure a section's stored morph owner matches the route's target.
+     *
+     * `builder_type` is written by Eloquent as `Model::getMorphClass()` —
+     * that's the alias when a morph map is registered, the FQCN otherwise.
+     * Accept either form against the route's `targetType` alias so the guard
+     * works regardless of map presence.
      */
     private function assertSectionBelongsTo(
         BuilderSection $section,
         string $targetType,
         int $targetId,
     ): void {
-        $morphMap = Relation::morphMap();
-        $expected = $morphMap[$targetType] ?? null;
+        if ($section->builder_id !== $targetId) {
+            abort(403, 'Section does not belong to the requested target.');
+        }
 
-        if ($section->builder_type !== $expected || $section->builder_id !== $targetId) {
+        $morphMap = Relation::morphMap();
+        $expectedClass = $morphMap[$targetType] ?? $targetType;
+        $sectionClass = $morphMap[$section->builder_type] ?? $section->builder_type;
+
+        if ($sectionClass !== $expectedClass) {
             abort(403, 'Section does not belong to the requested target.');
         }
     }

@@ -43,5 +43,18 @@ abstract class TestCase extends OrchestraTestCase
             'database' => ':memory:',
             'prefix' => '',
         ]);
+
+        // Placeholder APP_KEY — required by the Encryption service provider.
+        // Generated on-the-fly for each test run; never a real credential.
+        // Intentionally NOT read from an env var so the test suite is
+        // hermetic and free of secret-scanner free of false positives.
+        $app['config']->set('app.key', 'base64:'.base64_encode(random_bytes(32)));
+
+        // Strip the default `auth` middleware from the package's route group
+        // for feature tests. The host app is expected to authenticate its
+        // users; these tests verify controller behavior in isolation. The
+        // ServiceProvider re-registers routes in packageBooted() using this
+        // config, so setting it here takes effect before the test request.
+        $app['config']->set('visual-builder.routes.middleware', ['web']);
     }
 }

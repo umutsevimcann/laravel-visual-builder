@@ -1,0 +1,30 @@
+coverage:
+  # Allow small coverage fluctuations without failing the PR status. A 1%
+  # drop can happen just from minor refactors that rearrange branches —
+  # we still want status green as long as coverage doesn't regress
+  # materially. Meaningful regressions (>1%) mark the commit/PR as
+  # failure so reviewers notice.
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        informational: false
+    patch:
+      default:
+        target: 80%
+        threshold: 5%
+        informational: false
+
+comment:
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false
+
+ignore:
+  - "tests"
+  - "docs"
+  - "resources/dist"
+  - "config"
+  - "database/migrations"
+  - "routes"
