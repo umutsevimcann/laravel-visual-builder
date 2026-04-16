@@ -5,6 +5,40 @@ All notable changes to `laravel-visual-builder` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-04-16
+
+First dogfooding pass on a fresh Laravel 12 install surfaced four
+integration defects not caught by unit tests. All four fixed; the editor
+now renders HTTP 200 against a clean install.
+
+### Fixed
+
+- **Double route registration.** `hasRoute('web')` in `configurePackage()`
+  and the manual route group in `packageBooted()` both ran, producing every
+  endpoint at two URL paths. Removed `hasRoute('web')` — `packageBooted()`
+  is now the sole registration site, keeping config-driven prefix +
+  middleware + name prefix.
+- **`$bootstrap` undefined in editor view.** Blade Component `data()`
+  extraction did not expose payload when it was only produced in
+  `render()` with explicit view data. Refactored `Editor` to compute every
+  view variable in the constructor as public readonly properties.
+- **`DesignTokenService` crashed on fresh installs without settings table.**
+  Introduced `settingsTableExists()` schema probe; `all()` falls back to
+  defaults when the table is missing, `save()` raises a clear
+  `RuntimeException` with remediation steps.
+- **Editor view collided with anonymous component path.** Moved from
+  `resources/views/components/editor.blade.php` (conflicted with Laravel's
+  anonymous component convention) to `resources/views/editor.blade.php`.
+  Switched from Spatie's `hasViewComponent()` (produced hyphenated
+  `visual-builder-editor` tag) to `Blade::componentNamespace()` — the
+  documented `<x-visual-builder::editor>` syntax now works.
+
+### Added
+
+- `tests/Feature/ServiceProviderTest.php` — 8 integration tests covering
+  provider bootstrap, contract bindings, singleton resolution, config
+  namespace, and migration execution on the test database.
+
 ## [0.1.0] — 2026-04-16
 
 Initial public release. Foundational feature set; internal API is considered
