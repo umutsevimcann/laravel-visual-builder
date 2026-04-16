@@ -89,6 +89,6 @@ trait HasVisualBuilder
      */
     public function builderPreviewUrl(): string
     {
-        return url(Str::snake($this->getTable()) . '/' . $this->getKey());
+        return url(Str::snake($this->getTable()).'/'.$this->getKey());
     }
 }
