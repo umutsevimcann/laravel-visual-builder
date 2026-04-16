@@ -7,6 +7,7 @@ namespace Umutsevimcann\VisualBuilder\Support\Concerns;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Umutsevimcann\VisualBuilder\Domain\Models\BuilderRevision;
 use Umutsevimcann\VisualBuilder\Domain\Models\BuilderSection;
 
@@ -73,5 +74,21 @@ trait HasVisualBuilder
         return $this->builderSections
             ->filter(static fn (BuilderSection $section) => $section->isVisibleNow())
             ->values();
+    }
+
+    /**
+     * URL the builder iframe loads to preview this model.
+     *
+     * Host apps override this method on their buildable model to return
+     * the public route that renders the target (e.g. a page's permalink).
+     * The default derives a URL from the table name + primary key, which
+     * works for apps where frontend routes follow `/{table}/{id}` pattern.
+     *
+     * Return an absolute or relative URL — the builder will append the
+     * builder-mode query parameter automatically.
+     */
+    public function builderPreviewUrl(): string
+    {
+        return url(Str::snake($this->getTable()) . '/' . $this->getKey());
     }
 }

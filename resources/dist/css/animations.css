@@ -1,0 +1,157 @@
+/*
+ * Visual Builder — entrance animations.
+ *
+ * Loaded on the frontend to power section-level entrance animations
+ * configured via the editor's Style tab. Triggered by animations.js
+ * when a section enters the viewport (IntersectionObserver).
+ *
+ * 10 preset animations. Each has an initial state (pre-observer) and
+ * a keyframe rule triggered when .vb-anim-play is added by the observer.
+ *
+ * Accessibility: @prefers-reduced-motion disables ALL animations.
+ */
+
+/* Pre-play state: hidden (opacity only — transforms defined per-animation) */
+[data-vb-animation]:not(.vb-anim-play) {
+    opacity: 0;
+}
+
+/* Fade in */
+.vb-anim-fadeIn.vb-anim-play {
+    animation: vbFadeIn 800ms ease forwards;
+}
+
+/* Fade in up */
+.vb-anim-fadeInUp:not(.vb-anim-play) {
+    transform: translateY(40px);
+}
+.vb-anim-fadeInUp.vb-anim-play {
+    animation: vbFadeInUp 800ms ease forwards;
+}
+
+/* Fade in down */
+.vb-anim-fadeInDown:not(.vb-anim-play) {
+    transform: translateY(-40px);
+}
+.vb-anim-fadeInDown.vb-anim-play {
+    animation: vbFadeInDown 800ms ease forwards;
+}
+
+/* Fade in left */
+.vb-anim-fadeInLeft:not(.vb-anim-play) {
+    transform: translateX(-40px);
+}
+.vb-anim-fadeInLeft.vb-anim-play {
+    animation: vbFadeInLeft 800ms ease forwards;
+}
+
+/* Fade in right */
+.vb-anim-fadeInRight:not(.vb-anim-play) {
+    transform: translateX(40px);
+}
+.vb-anim-fadeInRight.vb-anim-play {
+    animation: vbFadeInRight 800ms ease forwards;
+}
+
+/* Zoom in */
+.vb-anim-zoomIn:not(.vb-anim-play) {
+    transform: scale(0.85);
+}
+.vb-anim-zoomIn.vb-anim-play {
+    animation: vbZoomIn 700ms ease forwards;
+}
+
+/* Slide in up */
+.vb-anim-slideInUp:not(.vb-anim-play) {
+    transform: translateY(80px);
+}
+.vb-anim-slideInUp.vb-anim-play {
+    animation: vbSlideInUp 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Slide in down */
+.vb-anim-slideInDown:not(.vb-anim-play) {
+    transform: translateY(-80px);
+}
+.vb-anim-slideInDown.vb-anim-play {
+    animation: vbSlideInDown 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Bounce in */
+.vb-anim-bounceIn:not(.vb-anim-play) {
+    transform: scale(0.3);
+}
+.vb-anim-bounceIn.vb-anim-play {
+    animation: vbBounceIn 900ms cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+/* Flip in X */
+.vb-anim-flipInX:not(.vb-anim-play) {
+    transform: perspective(400px) rotateX(90deg);
+}
+.vb-anim-flipInX.vb-anim-play {
+    animation: vbFlipInX 800ms ease forwards;
+}
+
+/* Keyframes */
+
+@keyframes vbFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes vbFadeInUp {
+    from { opacity: 0; transform: translateY(40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vbFadeInDown {
+    from { opacity: 0; transform: translateY(-40px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vbFadeInLeft {
+    from { opacity: 0; transform: translateX(-40px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes vbFadeInRight {
+    from { opacity: 0; transform: translateX(40px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes vbZoomIn {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes vbSlideInUp {
+    from { opacity: 0; transform: translateY(80px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vbSlideInDown {
+    from { opacity: 0; transform: translateY(-80px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes vbBounceIn {
+    0% { opacity: 0; transform: scale(0.3); }
+    50% { opacity: 1; transform: scale(1.05); }
+    70% { transform: scale(0.97); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes vbFlipInX {
+    from { opacity: 0; transform: perspective(400px) rotateX(90deg); }
+    to { opacity: 1; transform: perspective(400px) rotateX(0); }
+}
+
+/* Accessibility — respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+    [data-vb-animation] {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}

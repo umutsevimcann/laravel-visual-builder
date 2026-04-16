@@ -17,6 +17,7 @@ use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
 use Umutsevimcann\VisualBuilder\Infrastructure\Media\StorageMediaService;
 use Umutsevimcann\VisualBuilder\Infrastructure\Repositories\EloquentBuilderRepository;
 use Umutsevimcann\VisualBuilder\Infrastructure\Sanitization\PurifierSanitizer;
+use Umutsevimcann\VisualBuilder\View\Components\Editor;
 
 /**
  * Service provider — wires the package into Laravel.
@@ -48,6 +49,7 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             ->name('laravel-visual-builder')
             ->hasConfigFile('visual-builder')
             ->hasViews('visual-builder')
+            ->hasViewComponent('visual-builder', Editor::class)
             ->hasAssets()
             ->hasRoute('web')
             ->hasMigrations([
