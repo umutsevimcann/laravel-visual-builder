@@ -24,7 +24,11 @@ abstract class TestCase extends OrchestraTestCase
         parent::setUp();
 
         // Run package migrations against the testbench sqlite memory DB.
-        $this->loadMigrationsFrom(__DIR__.'/stubs/migrations');
+        // NOTE: the directory is `Stubs/` (capital S) to match the PSR-4
+        // namespace segment in the stub classes. Case matters on Linux
+        // (case-sensitive filesystem) even when it doesn't on Windows —
+        // using the same casing everywhere avoids CI-only autoload fails.
+        $this->loadMigrationsFrom(__DIR__.'/Stubs/migrations');
     }
 
     /**

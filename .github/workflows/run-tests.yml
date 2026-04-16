@@ -56,14 +56,14 @@ jobs:
 
       - name: Execute tests
         id: pest
-        run: vendor/bin/pest --ci --log-junit=junit-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.stability }}.xml
+        run: vendor/bin/pest --ci --log-junit=junit-cell-${{ strategy.job-index }}.xml
 
       - name: Upload junit report on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.stability }}
-          path: junit-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.stability }}.xml
+          name: junit-cell-${{ strategy.job-index }}
+          path: junit-cell-${{ strategy.job-index }}.xml
           if-no-files-found: ignore
           retention-days: 7
 

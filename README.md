@@ -3,9 +3,9 @@
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/umutsevimcann/laravel-visual-builder.svg?style=flat-square)](https://packagist.org/packages/umutsevimcann/laravel-visual-builder)
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/umutsevimcann/laravel-visual-builder/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/umutsevimcann/laravel-visual-builder/actions/workflows/run-tests.yml)
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/umutsevimcann/laravel-visual-builder/code-style.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/umutsevimcann/laravel-visual-builder/actions/workflows/code-style.yml)
-[![Codecov](https://img.shields.io/codecov/c/github/umutsevimcann/laravel-visual-builder?style=flat-square&token=)](https://codecov.io/gh/umutsevimcann/laravel-visual-builder)
+[![Codecov](https://img.shields.io/codecov/c/github/umutsevimcann/laravel-visual-builder?style=flat-square)](https://codecov.io/gh/umutsevimcann/laravel-visual-builder)
 [![Total Downloads](https://img.shields.io/packagist/dt/umutsevimcann/laravel-visual-builder.svg?style=flat-square)](https://packagist.org/packages/umutsevimcann/laravel-visual-builder)
-[![License](https://img.shields.io/packagist/l/umutsevimcann/laravel-visual-builder.svg?style=flat-square)](LICENSE.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE.md)
 
 **Modern visual page builder for Laravel.** Drag-drop section editor with live iframe preview, global design tokens, entrance animations, copy/paste, revisions, and responsive controls. Polymorphic — attach to any Eloquent model.
 
