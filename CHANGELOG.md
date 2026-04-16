@@ -5,6 +5,32 @@ All notable changes to `laravel-visual-builder` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.1.0 — Initial Release - 2026-04-16
+
+Initial public release. Foundational feature set.
+
+### Highlights
+
+- 8 field types + polymorphic `BuilderSection` model + 4 extension contracts
+- 8 domain actions (Create/Update/Delete/Duplicate/Reorder/BulkApply)
+- Blade component `<x-visual-builder::editor>` — drop into any admin
+- Live iframe preview with postMessage sync
+- 10 entrance animations, IntersectionObserver-based
+- Vanilla JS (no jQuery), framework-agnostic CSS
+- Pest test suite (33 tests, 54 assertions)
+- PHPStan level 5, zero errors
+
+See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/main/CHANGELOG.md) for full list.
+
+### Install
+
+    composer require umutsevimcann/laravel-visual-builder
+    php artisan visual-builder:install
+    
+### Dogfooding Bugs Fixed Post-Tag
+
+Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
+
 ## [0.1.1] — 2026-04-16
 
 First dogfooding pass on a fresh Laravel 12 install surfaced four
@@ -48,6 +74,7 @@ when documented in release notes).
 ### Added
 
 **Core framework**
+
 - `SectionTypeInterface` + `SectionTypeRegistry` (fluent, singleton) for
   declarative section schemas.
 - `FieldDefinition` abstract base plus eight concrete field types:
@@ -58,6 +85,7 @@ when documented in release notes).
   `visual-builder.revisions.server_enabled`).
 
 **Extension contracts**
+
 - `BuilderRepositoryInterface` (default: `EloquentBuilderRepository`)
 - `MediaServiceInterface` (default: `StorageMediaService`)
 - `SanitizerInterface` (default: `PurifierSanitizer`, falls back to
@@ -66,20 +94,24 @@ when documented in release notes).
   optional `visual-builder.authorization_gate` config)
 
 **Domain actions**
+
 - `CreateSection`, `UpdateSectionContent`, `UpdateSectionStyle`,
   `UpdateSectionVisibility`, `DeleteSection`, `DuplicateSection`,
   `ReorderSections`, `ApplyBuilderLayout` (single-transaction batched save).
 
 **Domain events**
+
 - `SectionCreated`, `SectionUpdated`, `SectionDeleted`,
   `SectionsReordered` — all `Dispatchable` + `SerializesModels` for
   queue compatibility.
 
 **Services**
+
 - `DesignTokenService` — global colors + fonts with CSS-variable output
   and settings-table-backed persistence.
 
 **HTTP layer**
+
 - `BuilderController` (show/save/store/duplicate/destroy/uploadImage)
   with morph-map-based target resolution + cross-target guards.
 - `DesignTokenController` (update).
@@ -88,6 +120,7 @@ when documented in release notes).
 - Config-driven routes (prefix, middleware, name prefix customizable).
 
 **UI layer**
+
 - `<x-visual-builder::editor :target="$model" />` Blade component —
   drops the entire editor shell into any admin view, no layout
   assumptions (works under AdminLTE, Filament, Nova, custom).
@@ -103,10 +136,12 @@ when documented in release notes).
   postMessage protocol.
 
 **Examples**
+
 - `BlankContainerSectionType` (generic rich-text body).
 - `TwoColumnSectionType` (image + heading + body + CTA template).
 
 **Tooling**
+
 - Migrations for `builder_sections` + `builder_revisions` tables
   with polymorphic indexes and singleton uniqueness constraint.
 - Publishable config with full inline documentation.
