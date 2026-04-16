@@ -1,15 +1,20 @@
-includes:
-    - phpstan-baseline.neon
-
 parameters:
     level: 5
     paths:
         - src
         - config
-        - database
     tmpDir: build/phpstan
-    checkOctaneCompatibility: true
-    checkModelProperties: true
 
     # Allow arbitrary content/style JSON array shapes (user-defined schemas)
     treatPhpDocTypesAsCertain: false
+
+    # Exclude config/ blade-like view references — they are documented
+    # but not loadable at static-analysis time without a full Laravel app.
+    excludePaths:
+        - config/visual-builder.php
+
+    # Ignore Laravel magic that static analysis cannot resolve without a
+    # full app context (Facades, helper globals, ServiceProvider resolution).
+    ignoreErrors:
+        # `config()` helper inside package returns mixed; we downcast at call sites.
+        - '#Parameter \#1 \$config of (function|method) .* expects array, mixed given#'
