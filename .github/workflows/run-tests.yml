@@ -7,6 +7,10 @@ on:
   pull_request:
     paths-ignore:
       - '**.md'
+  # Manual trigger from the Actions tab. Useful after changing repo
+  # secrets (CODECOV_TOKEN, etc.) or when a re-run without a code
+  # change is needed — paths-ignore would otherwise skip empty pushes.
+  workflow_dispatch: {}
 
 jobs:
   test:
