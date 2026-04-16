@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 15
 
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: [ubuntu-latest]
         php: [8.2, 8.3, 8.4]
@@ -55,7 +55,17 @@ jobs:
         run: composer show -D
 
       - name: Execute tests
-        run: vendor/bin/pest --ci
+        id: pest
+        run: vendor/bin/pest --ci --log-junit=junit-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.stability }}.xml
+
+      - name: Upload junit report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.stability }}
+          path: junit-${{ matrix.php }}-L${{ matrix.laravel }}-${{ matrix.stability }}.xml
+          if-no-files-found: ignore
+          retention-days: 7
 
   coverage:
     # Single dedicated coverage run. The matrix above runs without Xdebug
