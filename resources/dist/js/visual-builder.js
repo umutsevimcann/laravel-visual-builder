@@ -385,11 +385,39 @@
     function focusTraitsField(container, fieldKey) {
         const group = container.querySelector('[data-vb-field="' + CSS.escape(fieldKey) + '"]');
         if (!group) return;
-        group.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        // scrollIntoView() bubbles up through every scrollable ancestor —
+        // including document.scrollingElement — which caused the admin page
+        // itself to jump when the user clicked an inline-editable element
+        // in the iframe. Walk up to the nearest scrollable container only
+        // and scroll that, leaving the admin page alone.
+        scrollWithinNearestScrollable(group);
         group.classList.add('vb-field-focused');
         setTimeout(() => group.classList.remove('vb-field-focused'), 1500);
         const input = group.querySelector('input, textarea, select');
-        if (input) input.focus();
+        // preventScroll: true — HTMLElement.focus() otherwise triggers its
+        // own scrollIntoView which re-introduces the same page-jump bug.
+        if (input) input.focus({ preventScroll: true });
+    }
+
+    /**
+     * Scroll a single nearest scrollable ancestor of `element` so the
+     * element lands vertically centered within it. Does NOT scroll any
+     * ancestor above that (including window/document), which is exactly
+     * what scrollIntoView() would do. Stops at document.body.
+     */
+    function scrollWithinNearestScrollable(element) {
+        let parent = element.parentElement;
+        while (parent && parent !== document.body) {
+            const style = getComputedStyle(parent);
+            if (/(auto|scroll)/.test(style.overflowY)) {
+                const pr = parent.getBoundingClientRect();
+                const er = element.getBoundingClientRect();
+                const target = parent.scrollTop + (er.top - pr.top) - (pr.height / 2) + (er.height / 2);
+                parent.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+                return;
+            }
+            parent = parent.parentElement;
+        }
     }
 
     function renderTabButton(key, label, activeTab) {

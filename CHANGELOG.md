@@ -31,6 +31,19 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.2.6] — 2026-04-17
+
+### Fixed
+
+- **Clicking an inline-editable element no longer jumps the admin page.**
+  `focusTraitsField` used `element.scrollIntoView({ block: 'center' })`
+  which bubbles up through every scrollable ancestor — so scrolling the
+  traits panel to the right field also scrolled the AdminLTE host page
+  out from under the user. Replaced with a targeted scroll that walks up
+  to the nearest scrollable container and scrolls only that. The follow-up
+  `input.focus()` now passes `{ preventScroll: true }` to suppress the
+  browser's secondary scroll-into-view from the focus event itself.
+
 ## [0.2.5] — 2026-04-17
 
 ### Changed
