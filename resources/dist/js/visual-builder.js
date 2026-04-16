@@ -1130,6 +1130,176 @@
     function handleToolbar(action) {
         if (action === 'save') save();
         else if (action === 'reload') reloadIframe();
+        else if (action === 'site-settings') openSiteSettings();
+        else if (action === 'navigator') toggleNavigator();
+        else if (action === 'revisions') openRevisions();
+        // undo/redo are disabled in the view — history stack ships in v0.4
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Modal + Navigator helpers
+    // ─────────────────────────────────────────────────────────────
+
+    /** Open a modal by its data-vb-modal="name" key. */
+    function openModal(name) {
+        const modal = document.querySelector('[data-vb-modal="' + name + '"]');
+        if (!modal) return null;
+        modal.classList.add('vb-modal-open');
+        modal.setAttribute('aria-hidden', 'false');
+        return modal;
+    }
+
+    function closeModal(modal) {
+        if (!modal) return;
+        modal.classList.remove('vb-modal-open');
+        modal.setAttribute('aria-hidden', 'true');
+    }
+
+    /**
+     * Site Settings modal — shows current design tokens (colors + fonts)
+     * from state.config.tokens, allows editing, saves via the existing
+     * /design-tokens endpoint. Tokens are site-wide and apply to every
+     * page rendered with the visual-builder injected CSS variables.
+     */
+    function openSiteSettings() {
+        const modal = openModal('site-settings');
+        if (!modal) return;
+        const body = modal.querySelector('[data-vb-modal-body]');
+        if (!body) return;
+
+        const tokens = state.config.tokens || { colors: [], fonts: [] };
+        const parts = [
+            '<div class="vb-group"><div class="vb-group-title">Colors</div>',
+        ];
+        (tokens.colors || []).forEach((c, idx) => {
+            parts.push(
+                '<div class="vb-field" style="display:flex;gap:8px;align-items:center">',
+                '<input type="color" value="', escapeHtml(c.value), '" data-vb-token-color="', idx, '">',
+                '<input type="text" class="vb-field-input" style="flex:1" value="', escapeHtml(c.label), '" data-vb-token-color-label="', idx, '">',
+                '<code style="font-size:11px;color:#6b7280">', escapeHtml(c.id), '</code>',
+                '</div>',
+            );
+        });
+        parts.push('</div><div class="vb-group"><div class="vb-group-title">Fonts</div>');
+        (tokens.fonts || []).forEach((f, idx) => {
+            parts.push(
+                '<div class="vb-field">',
+                '<label class="vb-field-label"><span>', escapeHtml(f.label), '</span><code style="font-size:10px;color:#6b7280">', escapeHtml(f.id), '</code></label>',
+                '<input type="text" class="vb-field-input" value="', escapeHtml(f.family), '" data-vb-token-font-family="', idx, '" placeholder="\'Roboto\', sans-serif">',
+                '</div>',
+            );
+        });
+        parts.push('</div>');
+
+        setHtml(body, parts.join(''));
+
+        // Save button
+        const saveBtn = modal.querySelector('[data-vb-site-settings-save]');
+        if (saveBtn) {
+            saveBtn.onclick = async function () {
+                const colors = Array.from(body.querySelectorAll('[data-vb-token-color]')).map((input, idx) => ({
+                    id: tokens.colors[idx].id,
+                    label: body.querySelector('[data-vb-token-color-label="' + idx + '"]').value,
+                    value: input.value,
+                }));
+                const fonts = Array.from(body.querySelectorAll('[data-vb-token-font-family]')).map((input, idx) => ({
+                    id: tokens.fonts[idx].id,
+                    label: tokens.fonts[idx].label,
+                    family: input.value,
+                }));
+
+                try {
+                    const response = await fetch(state.config.routes.design_tokens, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': state.config.csrf_token,
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify({ colors, fonts }),
+                    });
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
+                    const data = await response.json();
+                    if (data.tokens) state.config.tokens = data.tokens;
+                    closeModal(modal);
+                    reloadIframe();
+                } catch (err) {
+                    alert('Site Settings save failed: ' + err.message);
+                }
+            };
+        }
+
+        // Close handlers
+        modal.querySelectorAll('[data-vb-modal-close]').forEach(function (btn) {
+            btn.onclick = function () { closeModal(modal); };
+        });
+    }
+
+    /**
+     * Navigator sidebar — vertical list of sections with icon + label.
+     * Click an entry to scroll the iframe to that section and select it.
+     */
+    function toggleNavigator() {
+        const nav = document.querySelector('[data-vb-navigator]');
+        if (!nav) return;
+        const isOpen = nav.getAttribute('aria-hidden') !== 'true';
+        if (isOpen) {
+            nav.setAttribute('aria-hidden', 'true');
+            nav.classList.remove('vb-navigator-open');
+            return;
+        }
+
+        const body = nav.querySelector('[data-vb-navigator-body]');
+        if (body) {
+            const sections = (state.config.sections || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+            if (sections.length === 0) {
+                setHtml(body, '<div class="vb-empty"><p class="vb-empty-text">No sections yet. Use the left panel to add one.</p></div>');
+            } else {
+                const html = sections.map((s) => {
+                    const type = state.config.types[s.type];
+                    const label = type ? type.label : s.type;
+                    return '<button type="button" class="vb-navigator-item" data-vb-nav-section-id="' + s.id + '">'
+                        + '<span class="vb-navigator-item-label">' + escapeHtml(label) + '</span>'
+                        + '<span class="vb-navigator-item-id">#' + s.id + '</span>'
+                        + (s.is_published ? '' : ' <span class="vb-badge-draft">draft</span>')
+                        + '</button>';
+                }).join('');
+                setHtml(body, html);
+
+                body.querySelectorAll('[data-vb-nav-section-id]').forEach(function (btn) {
+                    btn.addEventListener('click', function () {
+                        const id = parseInt(btn.getAttribute('data-vb-nav-section-id'), 10);
+                        postToIframe({ type: 'highlight-section', sectionId: id });
+                        renderTraits(id);
+                    });
+                });
+            }
+        }
+
+        nav.setAttribute('aria-hidden', 'false');
+        nav.classList.add('vb-navigator-open');
+
+        const closeBtn = nav.querySelector('[data-vb-navigator-close]');
+        if (closeBtn) closeBtn.onclick = function () { toggleNavigator(); };
+    }
+
+    /**
+     * Revisions modal — server-side history is scaffolded but the
+     * persistence layer lands in v0.4. Placeholder keeps the button
+     * from looking broken; when the v0.4 endpoint exists this fills in.
+     */
+    function openRevisions() {
+        const modal = openModal('revisions');
+        if (!modal) return;
+        const body = modal.querySelector('[data-vb-modal-body]');
+        if (body) {
+            setHtml(body, '<div class="vb-empty"><p class="vb-empty-text" style="padding:32px 16px;text-align:center;color:#6b7280">Revisions history lands in v0.4 — track every save + restore any prior version. Not yet available.</p></div>');
+        }
+        modal.querySelectorAll('[data-vb-modal-close]').forEach(function (btn) {
+            btn.onclick = function () { closeModal(modal); };
+        });
     }
 
     function setDevice(mode, btn) {
