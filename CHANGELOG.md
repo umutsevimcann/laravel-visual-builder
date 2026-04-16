@@ -31,6 +31,32 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.1.2] — 2026-04-16
+
+Controller-level feature coverage plus CI coverage reporting.
+
+### Added
+
+- **Feature tests** — every BuilderController + DesignTokenController
+  endpoint now has at least one happy-path + one failure-path test.
+  48 tests total (33 unit + 15 feature, 105 assertions).
+- **Codecov integration** — dedicated coverage job in `run-tests.yml`,
+  `codecov.yml` with 1% project threshold and 80% patch target,
+  Codecov + code-style badges in the README.
+- **Comprehensive documentation** — `docs/architecture.md`,
+  `docs/extension-points.md`, `docs/field-types.md`. README now links
+  all three as a "Documentation" section.
+
+### Fixed
+
+- `BuilderController::assertSectionBelongsTo` compared
+  `$section->builder_type` (stored as the morph alias when a morph map
+  is registered) against the FQCN resolved from the map — duplicate and
+  destroy requests always returned 403 for morph-mapped targets. The
+  guard now normalizes both sides through the morph map so alias-stored
+  and FQCN-stored sections both validate correctly. Surfaced while
+  writing feature tests.
+
 ## [0.1.1] — 2026-04-16
 
 First dogfooding pass on a fresh Laravel 12 install surfaced four
