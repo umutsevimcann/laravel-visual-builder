@@ -9,7 +9,14 @@ use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 use Umutsevimcann\VisualBuilder\Authorization\GateAuthorization;
 use Umutsevimcann\VisualBuilder\Contracts\AuthorizationInterface;
+use Umutsevimcann\VisualBuilder\Contracts\BuilderRepositoryInterface;
+use Umutsevimcann\VisualBuilder\Contracts\MediaServiceInterface;
+use Umutsevimcann\VisualBuilder\Contracts\SanitizerInterface;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
+use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
+use Umutsevimcann\VisualBuilder\Infrastructure\Media\StorageMediaService;
+use Umutsevimcann\VisualBuilder\Infrastructure\Repositories\EloquentBuilderRepository;
+use Umutsevimcann\VisualBuilder\Infrastructure\Sanitization\PurifierSanitizer;
 
 /**
  * Service provider — wires the package into Laravel.
@@ -20,16 +27,18 @@ use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
  *   - publishable assets (CSS/JS)
  *   - migrations (publishable; users opt-in to run)
  *   - install command (php artisan visual-builder:install)
+ *   - web routes (auto-registered when config.routes.enabled = true)
  *
  * Runtime container bindings in packageRegistered():
- *   - SectionTypeRegistry: singleton so all users of the registry see the
- *     same registered type list across the request.
- *   - AuthorizationInterface: default bound to GateAuthorization, which
- *     respects the optional `visual-builder.authorization_gate` config.
+ *   - SectionTypeRegistry: singleton — shared registration across the request.
+ *   - BuilderRepositoryInterface → EloquentBuilderRepository
+ *   - MediaServiceInterface → StorageMediaService
+ *   - SanitizerInterface → PurifierSanitizer
+ *   - AuthorizationInterface → GateAuthorization
+ *   - DesignTokenService: resolved via DI (its own deps are container-bound).
  *
- * User apps override any contract binding in their own service provider
- * AFTER this one runs (order of provider registration). Repositories,
- * controllers, actions, and routes are registered in Phase C.
+ * Host apps override any binding in their own service provider AFTER this
+ * one runs — Laravel's later-binding-wins semantics make overrides trivial.
  */
 final class VisualBuilderServiceProvider extends PackageServiceProvider
 {
@@ -40,6 +49,7 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             ->hasConfigFile('visual-builder')
             ->hasViews('visual-builder')
             ->hasAssets()
+            ->hasRoute('web')
             ->hasMigrations([
                 'create_builder_sections_table',
                 'create_builder_revisions_table',
@@ -58,13 +68,40 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
      * Bind package services in the IoC container.
      *
      * Users override any of these by re-binding the same abstract in their
-     * AppServiceProvider::register() — their provider runs after ours so
-     * their bindings win.
+     * own AppServiceProvider::register() — their provider runs after ours
+     * so their bindings win.
      */
     public function packageRegistered(): void
     {
+        // Singletons (shared state across the request)
         $this->app->singleton(SectionTypeRegistry::class);
 
+        // Contract → default implementation bindings
+        $this->app->bind(BuilderRepositoryInterface::class, EloquentBuilderRepository::class);
+        $this->app->bind(MediaServiceInterface::class, StorageMediaService::class);
+        $this->app->bind(SanitizerInterface::class, PurifierSanitizer::class);
         $this->app->bind(AuthorizationInterface::class, GateAuthorization::class);
+    }
+
+    /**
+     * Conditional route registration. Skips route file loading when the
+     * host app disables routes in config — they can still register their
+     * own routes pointing to package controllers.
+     */
+    public function packageBooted(): void
+    {
+        if (config('visual-builder.routes.enabled', true) === false) {
+            return;
+        }
+
+        $prefix = (string) config('visual-builder.routes.prefix', 'visual-builder');
+        $middleware = (array) config('visual-builder.routes.middleware', ['web']);
+        $namePrefix = (string) config('visual-builder.routes.name_prefix', 'visual-builder.');
+
+        $this->app['router']
+            ->prefix($prefix)
+            ->middleware($middleware)
+            ->name($namePrefix)
+            ->group(__DIR__ . '/../routes/web.php');
     }
 }
