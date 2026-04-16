@@ -1,32 +1,41 @@
 /**
  * Visual Builder — admin editor client.
  *
- * Single-file vanilla JS (no jQuery, no framework). IIFE-scoped to avoid
- * global pollution; exposes window.VBuilder only for debugging.
+ * Vanilla JS (no framework), IIFE-scoped to avoid global leakage. Exposes
+ * window.VBuilder only for browser-console debugging.
  *
- * Architecture:
- *   - Reads JSON bootstrap payload from <script data-vb-bootstrap>.
- *   - Boots iframe messaging (postMessage to/from the preview frame).
- *   - Renders block palette in left panel, traits form in right panel.
- *   - Owns the pending-updates buffer — nothing persists until Save click.
+ * Architecture overview:
+ *   1. readBootstrap()          — pick up the JSON payload rendered by
+ *                                 the Editor Blade component.
+ *   2. initIframeMessaging()    — listen for postMessage events from the
+ *                                 preview iframe; targetOrigin-pinned.
+ *   3. renderBlockPalette()     — left panel: one card per section type.
+ *   4. renderTraits(sectionId)  — right panel: 3-tab form (Content/Style/
+ *                                 Advanced) built from the registered
+ *                                 field schema.
+ *   5. save()                   — POST pending state to the save endpoint.
+ *
+ * Persistence boundary:
+ *   Nothing touches the database until the editor clicks Save. Until
+ *   then every change lives in state.pending keyed by section id, and
+ *   the client postMessages the preview iframe so the user sees live
+ *   updates without a server round-trip.
  *
  * Security:
- *   - All dynamic strings pass through escapeHtml() before innerHTML/template.
- *   - postMessage enforces targetOrigin = window.location.origin.
- *   - CSRF token from bootstrap injected as X-CSRF-TOKEN on every fetch.
- *
- * This file is intentionally minimal — the full admin interactions (tabs,
- * sliders, color pickers, modals, navigator, revisions, context menu,
- * drag-reorder) are implemented incrementally. Phase D ships a working
- * foundation; Phase E adds test coverage; future minor releases deepen
- * the UI feature set.
+ *   - All string interpolation passes through escapeHtml().
+ *   - Image upload and save fetch() calls include X-CSRF-TOKEN.
+ *   - postMessage uses targetOrigin = window.location.origin.
  */
 (function () {
     'use strict';
 
-    function escapeHtml(str) {
-        if (str == null) return '';
-        return String(str)
+    // ─────────────────────────────────────────────────────────────
+    // Utilities
+    // ─────────────────────────────────────────────────────────────
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
@@ -34,278 +43,876 @@
             .replace(/'/g, '&#039;');
     }
 
-    /**
-     * Replace an element's children with parsed HTML — avoids bare
-     * innerHTML assignment and clears stale event listeners at once.
-     */
-    function setHtml(el, html) {
-        if (!el) return;
-        el.replaceChildren();
-        el.insertAdjacentHTML('afterbegin', html);
+    function setHtml(element, html) {
+        if (!element) return;
+        element.replaceChildren();
+        element.insertAdjacentHTML('afterbegin', html);
     }
 
-    var VBuilder = {
+    function ensurePath(obj, keys) {
+        let ref = obj;
+        for (const key of keys) {
+            if (ref[key] === undefined || ref[key] === null) ref[key] = {};
+            ref = ref[key];
+        }
+        return ref;
+    }
+
+    function deepClone(value) {
+        return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────────────────────
+
+    const state = {
         config: null,
         iframe: null,
         iframeReady: false,
         dirty: false,
-        pendingUpdates: {},
-        pendingOrderedIds: null,
+        activeTab: 'content',
         selectedSectionId: null,
-        origin: window.location.origin,
-
-        boot: function () {
-            var node = document.querySelector('[data-vb-bootstrap]');
-            if (!node) {
-                console.error('[VBuilder] Bootstrap payload missing');
-                return;
-            }
-            try {
-                this.config = JSON.parse(node.textContent || '{}');
-            } catch (e) {
-                console.error('[VBuilder] Bootstrap parse failed:', e);
-                return;
-            }
-
-            this.iframe = document.querySelector('[data-vb-iframe]');
-            this.renderBlockPalette();
-            this.bindToolbar();
-            this.listenIframe();
-
-            window.VBuilder = this;
+        pending: {
+            sections: {},
+            orderedIds: null,
         },
+    };
 
-        /**
-         * Left panel: one card per registered section type.
-         */
-        renderBlockPalette: function () {
-            var container = document.querySelector('[data-vb-blocks]');
-            if (!container) return;
+    // ─────────────────────────────────────────────────────────────
+    // Bootstrap
+    // ─────────────────────────────────────────────────────────────
 
-            var existingTypes = {};
-            (this.config.sections || []).forEach(function (s) { existingTypes[s.type] = true; });
+    function readBootstrap() {
+        const node = document.querySelector('[data-vb-bootstrap]');
+        if (!node) {
+            console.error('[VBuilder] Bootstrap payload element missing');
+            return null;
+        }
+        try {
+            return JSON.parse(node.textContent || '{}');
+        } catch (err) {
+            console.error('[VBuilder] Bootstrap JSON parse failed:', err);
+            return null;
+        }
+    }
 
-            var html = Object.keys(this.config.types || {}).map(function (key) {
-                var type = this.config.types[key];
-                var disabled = !type.allows_multiple && existingTypes[key];
-                return [
-                    '<button type="button" class="vb-block" data-vb-block="' + escapeHtml(key) + '"',
-                    disabled ? ' disabled' : '',
-                    '>',
-                    '<span class="vb-block-icon" aria-hidden="true"></span>',
-                    '<span class="vb-block-info">',
-                    '<span class="vb-block-title">' + escapeHtml(type.label) + '</span>',
-                    '<span class="vb-block-desc">' + escapeHtml(type.description || '') + '</span>',
-                    '</span>',
-                    '</button>',
-                ].join('');
-            }.bind(this)).join('');
+    function findSection(id) {
+        return (state.config.sections || []).find(s => s.id === id) || null;
+    }
 
-            setHtml(container, html);
+    // ─────────────────────────────────────────────────────────────
+    // Block palette (left)
+    // ─────────────────────────────────────────────────────────────
 
-            container.querySelectorAll('[data-vb-block]:not([disabled])').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    this.createSection(btn.getAttribute('data-vb-block'));
-                }.bind(this));
-            }.bind(this));
-        },
+    function renderBlockPalette() {
+        const container = document.querySelector('[data-vb-blocks]');
+        if (!container) return;
 
-        bindToolbar: function () {
-            var self = this;
+        const existingTypes = new Set((state.config.sections || []).map(s => s.type));
 
-            document.querySelectorAll('[data-vb-action]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    self.handleToolbarAction(btn.getAttribute('data-vb-action'));
-                });
-            });
+        const html = Object.entries(state.config.types || {}).map(([typeKey, type]) => {
+            const disabled = !type.allows_multiple && existingTypes.has(typeKey);
+            return [
+                '<button type="button" class="vb-block" data-vb-block="', escapeHtml(typeKey), '"',
+                disabled ? ' disabled' : '',
+                ' title="', escapeHtml(type.description || ''), '">',
+                '<span class="vb-block-icon" aria-hidden="true"></span>',
+                '<span class="vb-block-info">',
+                '<span class="vb-block-title">', escapeHtml(type.label), '</span>',
+                '<span class="vb-block-desc">', escapeHtml(type.description || ''), '</span>',
+                '</span>',
+                '</button>',
+            ].join('');
+        }).join('');
 
-            document.querySelectorAll('[data-vb-device]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    self.setDevice(btn.getAttribute('data-vb-device'), btn);
-                });
-            });
+        setHtml(container, html);
 
-            window.addEventListener('beforeunload', function (e) {
-                if (self.dirty) {
-                    e.preventDefault();
-                    e.returnValue = '';
-                }
-            });
+        container.querySelectorAll('[data-vb-block]:not([disabled])').forEach(btn => {
+            btn.addEventListener('click', () => createSection(btn.getAttribute('data-vb-block')));
+        });
+    }
 
-            // Keyboard shortcuts — standard editor conventions
-            document.addEventListener('keydown', function (e) {
-                var cmd = e.ctrlKey || e.metaKey;
-                if (!cmd) return;
-                var key = e.key.toLowerCase();
-                if (key === 's') {
-                    e.preventDefault();
-                    self.save();
-                }
-            });
-        },
-
-        handleToolbarAction: function (action) {
-            switch (action) {
-                case 'save': this.save(); break;
-                case 'reload': this.reloadIframe(); break;
-                case 'site-settings': this.openModal('site-settings'); break;
-                case 'revisions': this.openModal('revisions'); break;
-                case 'navigator': this.toggleNavigator(); break;
-            }
-        },
-
-        setDevice: function (mode, btn) {
-            var viewport = document.querySelector('[data-vb-viewport]');
-            if (!viewport) return;
-            viewport.classList.remove('vb-device-tablet', 'vb-device-mobile');
-            if (mode === 'tablet' || mode === 'mobile') {
-                viewport.classList.add('vb-device-' + mode);
-            }
-            document.querySelectorAll('[data-vb-device]').forEach(function (b) {
-                b.classList.remove('vb-device-active');
-            });
-            btn.classList.add('vb-device-active');
-        },
-
-        listenIframe: function () {
-            var self = this;
-            window.addEventListener('message', function (e) {
-                if (e.origin !== self.origin) return;
-                var msg = e.data;
-                if (!msg || msg.source !== 'vb-iframe') return;
-
-                if (msg.type === 'loaded') {
-                    self.iframeReady = true;
-                    var loading = document.querySelector('[data-vb-loading]');
-                    if (loading) loading.classList.add('vb-hidden');
-                } else if (msg.type === 'section-clicked' || msg.type === 'field-focused') {
-                    self.selectSection(msg.sectionId);
-                }
-            });
-        },
-
-        selectSection: function (sectionId) {
-            this.selectedSectionId = sectionId;
-            var section = (this.config.sections || []).filter(function (s) {
-                return s.id === sectionId;
-            })[0];
-            if (!section) return;
-
-            var type = this.config.types[section.type];
-            var container = document.querySelector('[data-vb-traits]');
-            if (!container) return;
-
-            setHtml(container, [
-                '<div class="vb-section-header">',
-                '<div class="vb-section-header-icon" aria-hidden="true"></div>',
-                '<div>',
-                '<div class="vb-section-header-label">' + escapeHtml((type && type.label) || section.type) + '</div>',
-                '<div class="vb-section-header-meta">#' + section.id + ' · ' + escapeHtml(section.type) + '</div>',
-                '</div>',
-                '</div>',
-                '<div class="vb-empty"><p class="vb-empty-text">Field editors render here — minimal shell ships in v0.1; extended widgets arrive in subsequent releases.</p></div>',
-            ].join(''));
-        },
-
-        /**
-         * Create a new section via POST to the bootstrap store route.
-         * On success, reloads the page — the new section shows up in both
-         * the block palette (now "Added") and the iframe.
-         */
-        createSection: function (typeKey) {
-            var self = this;
-            fetch(self.config.routes.store, {
+    async function createSection(typeKey) {
+        if (state.dirty && !confirm('Discard unsaved changes and add a new section?')) {
+            return;
+        }
+        const body = 'type=' + encodeURIComponent(typeKey)
+            + '&_token=' + encodeURIComponent(state.config.csrf_token);
+        try {
+            const response = await fetch(state.config.routes.store, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRF-TOKEN': self.config.csrf_token,
+                    'X-CSRF-TOKEN': state.config.csrf_token,
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
                 },
-                body: 'type=' + encodeURIComponent(typeKey) + '&_token=' + encodeURIComponent(self.config.csrf_token),
+                body,
                 redirect: 'manual',
-            }).then(function (response) {
-                if (response.status >= 200 && response.status < 400) {
-                    window.location.reload();
-                } else {
-                    console.error('[VBuilder] Create section failed:', response.status);
-                }
-            }).catch(function (err) {
-                console.error('[VBuilder] Create section error:', err);
             });
-        },
+            if (response.status >= 200 && response.status < 400) {
+                window.location.reload();
+                return;
+            }
+            console.error('[VBuilder] Create section failed:', response.status);
+        } catch (err) {
+            console.error('[VBuilder] Create section error:', err);
+        }
+    }
 
-        /**
-         * POST pending state to the save endpoint.
-         */
-        save: function () {
-            var self = this;
-            var payload = {};
-            if (self.pendingOrderedIds && self.pendingOrderedIds.length) payload.ordered_ids = self.pendingOrderedIds;
-            if (Object.keys(self.pendingUpdates).length) payload.sections = self.pendingUpdates;
+    // ─────────────────────────────────────────────────────────────
+    // Traits panel (right) — 3 tabs
+    // ─────────────────────────────────────────────────────────────
 
-            if (!payload.ordered_ids && !payload.sections) return;
+    function renderTraits(sectionId) {
+        state.selectedSectionId = sectionId;
+        const section = findSection(sectionId);
+        const container = document.querySelector('[data-vb-traits]');
+        if (!section || !container) return;
 
-            fetch(self.config.routes.save, {
+        const type = state.config.types[section.type];
+        if (!type) {
+            setHtml(container, '<div class="vb-empty"><p class="vb-empty-text">Unknown section type.</p></div>');
+            return;
+        }
+
+        const activeTab = state.activeTab;
+        const html = [
+            '<div class="vb-section-header">',
+            '<div class="vb-section-header-icon" aria-hidden="true"></div>',
+            '<div>',
+            '<div class="vb-section-header-label">', escapeHtml(type.label), '</div>',
+            '<div class="vb-section-header-meta">#', escapeHtml(String(section.id)), ' · ', escapeHtml(section.type), '</div>',
+            '</div>',
+            '</div>',
+            '<div class="vb-tabs" role="tablist">',
+            renderTabButton('content', 'Content', activeTab),
+            renderTabButton('style', 'Style', activeTab),
+            renderTabButton('advanced', 'Advanced', activeTab),
+            '</div>',
+            '<div class="vb-tab-panel', activeTab === 'content' ? ' vb-tab-panel-active' : '', '" data-vb-tab="content">',
+            renderContentTab(section, type),
+            '</div>',
+            '<div class="vb-tab-panel', activeTab === 'style' ? ' vb-tab-panel-active' : '', '" data-vb-tab="style">',
+            renderStyleTab(section, type),
+            '</div>',
+            '<div class="vb-tab-panel', activeTab === 'advanced' ? ' vb-tab-panel-active' : '', '" data-vb-tab="advanced">',
+            renderAdvancedTab(section, type),
+            '</div>',
+        ].join('');
+
+        setHtml(container, html);
+        bindTabSwitches(container);
+        bindFieldEditors(container, section);
+        bindStyleEditors(container, section);
+        bindSectionActions(container, section);
+
+        postToIframe({ type: 'highlight-section', sectionId: section.id });
+    }
+
+    function renderTabButton(key, label, activeTab) {
+        const active = activeTab === key;
+        return [
+            '<button type="button" class="vb-tab', active ? ' vb-tab-active' : '', '"',
+            ' role="tab" aria-selected="', active ? 'true' : 'false', '"',
+            ' data-vb-tab-btn="', escapeHtml(key), '">',
+            escapeHtml(label),
+            '</button>',
+        ].join('');
+    }
+
+    function bindTabSwitches(container) {
+        container.querySelectorAll('[data-vb-tab-btn]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.activeTab = btn.getAttribute('data-vb-tab-btn');
+                renderTraits(state.selectedSectionId);
+            });
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Content tab — field editors per type
+    // ─────────────────────────────────────────────────────────────
+
+    function renderContentTab(section, type) {
+        const parts = [
+            '<div class="vb-group">',
+            '<div class="vb-group-title">Visibility</div>',
+            '<div class="vb-field">',
+            '<label class="vb-field-label">',
+            '<span>Published</span>',
+            '<input type="checkbox" data-vb-published', section.is_published ? ' checked' : '', '>',
+            '</label>',
+            '<div class="vb-field-help">Hide the whole section without deleting it.</div>',
+            '</div>',
+            '</div>',
+        ];
+
+        parts.push('<div class="vb-group"><div class="vb-group-title">Fields</div>');
+        (type.fields || []).forEach(field => {
+            parts.push(renderField(section, field));
+        });
+        parts.push('</div>');
+
+        parts.push([
+            '<div class="vb-group">',
+            '<div class="vb-group-title">Actions</div>',
+            '<div style="display:flex;gap:6px">',
+            type.allows_multiple
+                ? '<button type="button" class="vb-btn vb-btn-ghost" data-vb-action-section="duplicate">Duplicate</button>'
+                : '',
+            type.is_deletable
+                ? '<button type="button" class="vb-btn vb-btn-ghost" style="color:#dc2626" data-vb-action-section="delete">Delete</button>'
+                : '',
+            '</div>',
+            '</div>',
+        ].join(''));
+
+        return parts.join('');
+    }
+
+    function renderField(section, field) {
+        const value = currentContentValue(section, field.key);
+        const visibility = section.content && section.content._visibility ? section.content._visibility : {};
+        const isVisible = visibility[field.key] !== false;
+        const wrapperCls = 'vb-field' + (isVisible ? '' : ' vb-field-hidden');
+        const parts = [
+            '<div class="', wrapperCls, '" data-vb-field="', escapeHtml(field.key), '">',
+            '<label class="vb-field-label">',
+            '<span>', escapeHtml(field.label), field.required ? ' <em style="color:#dc2626">*</em>' : '', '</span>',
+            field.toggleable
+                ? '<button type="button" style="background:none;border:0;cursor:pointer;font-size:14px" data-vb-toggle-field="' + escapeHtml(field.key) + '" title="Show/hide on site">' + (isVisible ? '👁' : '🙈') + '</button>'
+                : '',
+            '</label>',
+        ];
+
+        switch (field.input_type) {
+            case 'text':
+                parts.push(renderTextInput(section, field, value));
+                break;
+            case 'html':
+                parts.push(renderTextarea(section, field, value));
+                break;
+            case 'toggle':
+                parts.push(renderToggleControl(section, field, value));
+                break;
+            case 'select':
+                parts.push(renderSelect(section, field, value));
+                break;
+            case 'link':
+                parts.push(renderLink(section, field));
+                break;
+            case 'image':
+                parts.push(renderImage(section, field, value));
+                break;
+            case 'reference':
+                parts.push(renderReference(section, field, value));
+                break;
+            case 'repeater':
+                parts.push('<div class="vb-field-help" style="color:#6b7280">Repeater widget planned for v0.2.</div>');
+                break;
+            default:
+                parts.push('<div class="vb-field-help">Unsupported field type: ' + escapeHtml(field.input_type) + '</div>');
+        }
+
+        if (field.help) {
+            parts.push('<div class="vb-field-help">', escapeHtml(field.help), '</div>');
+        }
+        parts.push('</div>');
+        return parts.join('');
+    }
+
+    function currentContentValue(section, fieldKey) {
+        return section.content && section.content[fieldKey] !== undefined ? section.content[fieldKey] : null;
+    }
+
+    function renderTextInput(section, field, value) {
+        if (field.translatable) return renderLocalizedInput(section, field, value, 'input');
+        const v = typeof value === 'string' ? value : '';
+        return '<input type="text" class="vb-field-input" data-vb-input="' + escapeHtml(field.key)
+            + '" placeholder="' + escapeHtml(field.placeholder || '') + '"'
+            + ' value="' + escapeHtml(v) + '">';
+    }
+
+    function renderTextarea(section, field, value) {
+        return renderLocalizedInput(section, field, value, 'textarea');
+    }
+
+    function renderLocalizedInput(section, field, value, inputTag) {
+        const locales = state.config.locales || ['en'];
+        const localeMap = (value && typeof value === 'object' && !Array.isArray(value)) ? value : {};
+        const activeLocale = field._activeLocale || locales[0];
+
+        const tabs = locales.map(loc => {
+            const active = loc === activeLocale;
+            return '<button type="button" style="padding:2px 8px;font-size:10px;border:1px solid ' + (active ? '#2563eb' : '#d1d5db') + ';background:' + (active ? '#eef2ff' : '#fff') + ';color:' + (active ? '#2563eb' : '#6b7280') + ';border-radius:3px;margin-right:2px;cursor:pointer" data-vb-locale="' + escapeHtml(loc) + '" data-vb-field-key="' + escapeHtml(field.key) + '">'
+                + escapeHtml(loc.toUpperCase()) + '</button>';
+        }).join('');
+
+        const inputs = locales.map(loc => {
+            const active = loc === activeLocale;
+            const text = localeMap[loc] !== undefined && localeMap[loc] !== null ? String(localeMap[loc]) : '';
+            const hidden = active ? '' : ' style="display:none"';
+            if (inputTag === 'textarea') {
+                return '<textarea class="vb-field-textarea"' + hidden + ' data-vb-input="' + escapeHtml(field.key) + '" data-vb-locale="' + escapeHtml(loc) + '" placeholder="' + escapeHtml(field.placeholder || '') + '">' + escapeHtml(text) + '</textarea>';
+            }
+            return '<input type="text" class="vb-field-input"' + hidden + ' data-vb-input="' + escapeHtml(field.key) + '" data-vb-locale="' + escapeHtml(loc) + '" placeholder="' + escapeHtml(field.placeholder || '') + '" value="' + escapeHtml(text) + '">';
+        }).join('');
+
+        return '<div style="margin-bottom:4px">' + tabs + '</div>' + inputs;
+    }
+
+    function renderToggleControl(section, field, value) {
+        const checked = value === true || value === 'true' || value === 1 || value === '1';
+        return '<label style="display:inline-flex;align-items:center;gap:6px"><input type="checkbox" data-vb-input="' + escapeHtml(field.key) + '"' + (checked ? ' checked' : '') + '><span style="font-size:12px;color:#6b7280">' + (checked ? 'Enabled' : 'Disabled') + '</span></label>';
+    }
+
+    function renderSelect(section, field, value) {
+        const options = (field.options || (field.meta && field.meta.options)) || {};
+        const opts = Object.entries(options).map(([k, label]) =>
+            '<option value="' + escapeHtml(k) + '"' + (k === value ? ' selected' : '') + '>' + escapeHtml(label) + '</option>',
+        ).join('');
+        return '<select class="vb-field-select" data-vb-input="' + escapeHtml(field.key) + '"><option value="">—</option>' + opts + '</select>';
+    }
+
+    function renderLink(section, field) {
+        const urlKey = field.key + '_url';
+        const labelKey = field.key + '_label';
+        const url = currentContentValue(section, urlKey) || '';
+        const parts = [
+            '<input type="url" class="vb-field-input" data-vb-input="' + escapeHtml(urlKey) + '" placeholder="https://..." value="' + escapeHtml(url) + '">',
+        ];
+        if (field.with_label !== false) {
+            const labelValue = currentContentValue(section, labelKey);
+            parts.push('<div class="vb-field-help" style="margin-top:4px">Button label per locale:</div>');
+            const labelField = Object.assign({}, field, { key: labelKey, translatable: true });
+            parts.push(renderLocalizedInput(section, labelField, labelValue, 'input'));
+        }
+        return parts.join('');
+    }
+
+    function renderImage(section, field, value) {
+        const path = typeof value === 'string' ? value : '';
+        const hasImage = path !== '';
+        const preview = hasImage
+            ? '<img src="' + escapeHtml(imagePathToUrl(path)) + '" alt="" style="max-width:100%;max-height:120px;object-fit:cover;border-radius:4px;display:block">'
+            : '<div style="padding:20px;background:#f3f4f6;border-radius:4px;color:#9ca3af;font-size:12px;text-align:center">No image</div>';
+        return [
+            '<div>',
+            preview,
+            '<div style="display:flex;gap:4px;margin-top:6px">',
+            '<button type="button" class="vb-btn vb-btn-ghost" data-vb-image-upload="' + escapeHtml(field.key) + '" style="flex:1">Upload</button>',
+            hasImage ? '<button type="button" class="vb-btn vb-btn-ghost" style="color:#dc2626" data-vb-image-clear="' + escapeHtml(field.key) + '">×</button>' : '',
+            '</div>',
+            hasImage ? '<div class="vb-field-help" style="font-family:monospace;font-size:10px;word-break:break-all">' + escapeHtml(path) + '</div>' : '',
+            '</div>',
+        ].join('');
+    }
+
+    function imagePathToUrl(path) {
+        if (!path) return '';
+        if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) return path;
+        if (path.startsWith('assets/')) return '/' + path;
+        return '/storage/' + path;
+    }
+
+    function renderReference(section, field, value) {
+        const selected = Array.isArray(value) ? value.map(Number) : [];
+        const options = field.options_preview || [];
+        if (options.length === 0) {
+            return '<div class="vb-field-help" style="color:#b45309;font-style:italic">No options available. Register an options resolver on this ReferenceField.</div>';
+        }
+        const checkboxes = options.map(o => {
+            const checked = selected.includes(Number(o.id));
+            return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px"><input type="checkbox" data-vb-reference="' + escapeHtml(field.key) + '" value="' + escapeHtml(String(o.id)) + '"' + (checked ? ' checked' : '') + '> ' + escapeHtml(o.label || '#' + o.id) + '</label>';
+        }).join('');
+        return '<div style="max-height:200px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:4px;padding:6px">' + checkboxes + '</div>';
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Style tab
+    // ─────────────────────────────────────────────────────────────
+
+    function renderStyleTab(section) {
+        const style = section.style || {};
+        const parts = [
+            '<div class="vb-group">',
+            '<div class="vb-group-title">Background</div>',
+            colorPickerRow('Background color', 'bg_color', style.bg_color),
+            colorPickerRow('Text color', 'text_color', style.text_color),
+            '</div>',
+
+            '<div class="vb-group">',
+            '<div class="vb-group-title">Spacing</div>',
+            selectRow('Vertical padding', 'padding_y', style.padding_y, {
+                '': 'Default',
+                '40px': 'Compact (40px)',
+                '80px': 'Normal (80px)',
+                '120px': 'Spacious (120px)',
+                '160px': 'Extra (160px)',
+            }),
+            selectRow('Alignment', 'alignment', style.alignment, {
+                '': 'Default',
+                'left': 'Left',
+                'center': 'Center',
+                'right': 'Right',
+            }),
+            '</div>',
+
+            '<div class="vb-group">',
+            '<div class="vb-group-title">Motion</div>',
+            selectRow('Entrance animation', 'animation', style.animation, {
+                '': 'None',
+                'fadeIn': 'Fade In',
+                'fadeInUp': 'Fade In Up',
+                'fadeInDown': 'Fade In Down',
+                'fadeInLeft': 'Fade In Left',
+                'fadeInRight': 'Fade In Right',
+                'zoomIn': 'Zoom In',
+                'slideInUp': 'Slide In Up',
+                'slideInDown': 'Slide In Down',
+                'bounceIn': 'Bounce In',
+                'flipInX': 'Flip In',
+            }),
+            '</div>',
+        ];
+        return parts.join('');
+    }
+
+    function colorPickerRow(label, key, value) {
+        const v = value || '#ffffff';
+        return [
+            '<div class="vb-field">',
+            '<label class="vb-field-label"><span>', escapeHtml(label), '</span></label>',
+            '<div style="display:flex;gap:6px;align-items:center">',
+            '<input type="color" data-vb-style="', escapeHtml(key), '" value="', escapeHtml(v), '" style="width:44px;height:32px;padding:2px;border:1px solid #d1d5db;border-radius:4px">',
+            '<input type="text" class="vb-field-input" data-vb-style-text="', escapeHtml(key), '" value="', escapeHtml(value || ''), '" placeholder="inherit" style="flex:1;font-family:monospace">',
+            '</div>',
+            '</div>',
+        ].join('');
+    }
+
+    function selectRow(label, key, current, options) {
+        const opts = Object.entries(options).map(([k, lbl]) =>
+            '<option value="' + escapeHtml(k) + '"' + ((current || '') === k ? ' selected' : '') + '>' + escapeHtml(lbl) + '</option>',
+        ).join('');
+        return [
+            '<div class="vb-field">',
+            '<label class="vb-field-label"><span>', escapeHtml(label), '</span></label>',
+            '<select class="vb-field-select" data-vb-style="', escapeHtml(key), '">', opts, '</select>',
+            '</div>',
+        ].join('');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Advanced tab
+    // ─────────────────────────────────────────────────────────────
+
+    function renderAdvancedTab(section) {
+        return [
+            '<div class="vb-group">',
+            '<div class="vb-group-title">Section info</div>',
+            '<div class="vb-field">',
+            '<label class="vb-field-label"><span>Database ID</span></label>',
+            '<input type="text" class="vb-field-input" value="', escapeHtml(String(section.id)), '" readonly>',
+            '</div>',
+            '<div class="vb-field">',
+            '<label class="vb-field-label"><span>Instance key</span></label>',
+            '<input type="text" class="vb-field-input" value="', escapeHtml(section.instance_key || '__default__'), '" readonly>',
+            '</div>',
+            '<div class="vb-field">',
+            '<label class="vb-field-label"><span>Sort order</span></label>',
+            '<input type="text" class="vb-field-input" value="', escapeHtml(String(section.sort_order || 0)), '" readonly>',
+            '</div>',
+            '<div class="vb-field-help">Drag sections in the preview to reorder (planned for v0.2).</div>',
+            '</div>',
+        ].join('');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Event wiring
+    // ─────────────────────────────────────────────────────────────
+
+    function bindFieldEditors(container, section) {
+        const publishedInput = container.querySelector('[data-vb-published]');
+        if (publishedInput) {
+            publishedInput.addEventListener('change', () => {
+                applyPendingChange(section.id, s => {
+                    s.is_published = publishedInput.checked;
+                });
+            });
+        }
+
+        container.querySelectorAll('[data-vb-input]').forEach(input => {
+            input.addEventListener('input', () => handleInputChange(section, input));
+            input.addEventListener('change', () => handleInputChange(section, input));
+        });
+
+        container.querySelectorAll('[data-vb-locale][data-vb-field-key]').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const fieldKey = tab.getAttribute('data-vb-field-key');
+                const locale = tab.getAttribute('data-vb-locale');
+                const type = state.config.types[section.type];
+                const field = (type.fields || []).find(f => f.key === fieldKey);
+                if (field) {
+                    field._activeLocale = locale;
+                    renderTraits(state.selectedSectionId);
+                }
+            });
+        });
+
+        container.querySelectorAll('[data-vb-toggle-field]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const fieldKey = btn.getAttribute('data-vb-toggle-field');
+                applyPendingChange(section.id, s => {
+                    ensurePath(s, ['content', '_visibility']);
+                    const current = s.content._visibility[fieldKey];
+                    s.content._visibility[fieldKey] = current === false ? true : false;
+                });
+                renderTraits(state.selectedSectionId);
+                const newVisible = (findSection(section.id).content._visibility || {})[fieldKey] !== false;
+                postToIframe({ type: 'visibility-update', sectionId: section.id, fieldKey, visible: newVisible });
+            });
+        });
+
+        container.querySelectorAll('[data-vb-image-upload]').forEach(btn => {
+            btn.addEventListener('click', () => openImageUpload(section, btn.getAttribute('data-vb-image-upload')));
+        });
+        container.querySelectorAll('[data-vb-image-clear]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const key = btn.getAttribute('data-vb-image-clear');
+                applyPendingChange(section.id, s => {
+                    ensurePath(s, ['content']);
+                    s.content[key] = '';
+                });
+                renderTraits(state.selectedSectionId);
+                postToIframe({ type: 'image-update', sectionId: section.id, fieldKey: key, url: '' });
+            });
+        });
+
+        container.querySelectorAll('[data-vb-reference]').forEach(cb => {
+            cb.addEventListener('change', () => {
+                const fieldKey = cb.getAttribute('data-vb-reference');
+                const id = parseInt(cb.value, 10);
+                applyPendingChange(section.id, s => {
+                    ensurePath(s, ['content']);
+                    const list = Array.isArray(s.content[fieldKey]) ? s.content[fieldKey].map(Number) : [];
+                    const idx = list.indexOf(id);
+                    if (cb.checked && idx === -1) list.push(id);
+                    if (!cb.checked && idx !== -1) list.splice(idx, 1);
+                    s.content[fieldKey] = list;
+                });
+            });
+        });
+    }
+
+    function handleInputChange(section, input) {
+        const key = input.getAttribute('data-vb-input');
+        const locale = input.getAttribute('data-vb-locale');
+        const value = input.type === 'checkbox' ? input.checked : input.value;
+
+        applyPendingChange(section.id, s => {
+            ensurePath(s, ['content']);
+            if (locale) {
+                if (typeof s.content[key] !== 'object' || Array.isArray(s.content[key])) s.content[key] = {};
+                s.content[key][locale] = value;
+            } else {
+                s.content[key] = value;
+            }
+        });
+
+        postToIframe({
+            type: 'field-update',
+            sectionId: section.id,
+            fieldKey: key,
+            locale: locale || state.config.fallback_locale,
+            value,
+        });
+    }
+
+    function bindStyleEditors(container, section) {
+        container.querySelectorAll('[data-vb-style]').forEach(input => {
+            input.addEventListener('input', () => handleStyleChange(section, input));
+            input.addEventListener('change', () => handleStyleChange(section, input));
+        });
+        container.querySelectorAll('[data-vb-style-text]').forEach(input => {
+            input.addEventListener('input', () => {
+                const key = input.getAttribute('data-vb-style-text');
+                const colorInput = container.querySelector('input[type="color"][data-vb-style="' + CSS.escape(key) + '"]');
+                if (colorInput && /^#[0-9a-fA-F]{3,8}$/.test(input.value)) colorInput.value = input.value;
+                handleStyleChange(section, input, key);
+            });
+        });
+    }
+
+    function handleStyleChange(section, input, overrideKey) {
+        const key = overrideKey || input.getAttribute('data-vb-style');
+        if (!key) return;
+        const value = input.value;
+        if (input.type === 'color') {
+            const textInput = document.querySelector('input[type="text"][data-vb-style-text="' + CSS.escape(key) + '"]');
+            if (textInput) textInput.value = value;
+        }
+        applyPendingChange(section.id, s => {
+            ensurePath(s, ['style']);
+            s.style[key] = value;
+        });
+        postToIframe({ type: 'style-update', sectionId: section.id, style: findSection(section.id).style || {} });
+    }
+
+    function bindSectionActions(container, section) {
+        container.querySelectorAll('[data-vb-action-section]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const action = btn.getAttribute('data-vb-action-section');
+                if (action === 'delete') return sectionDelete(section);
+                if (action === 'duplicate') return sectionDuplicate(section);
+            });
+        });
+    }
+
+    async function sectionDelete(section) {
+        if (!confirm('Delete this section?')) return;
+        const url = state.config.routes.destroy_template.replace(/\/0$/, '/' + section.id);
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRF-TOKEN': state.config.csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+            });
+            if (response.ok) window.location.reload();
+        } catch (err) {
+            console.error('[VBuilder] Delete failed:', err);
+        }
+    }
+
+    async function sectionDuplicate(section) {
+        const url = state.config.routes.duplicate_template.replace(/\/0\/duplicate$/, '/' + section.id + '/duplicate');
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRF-TOKEN': state.config.csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                redirect: 'manual',
+            });
+            if (response.status >= 200 && response.status < 400) window.location.reload();
+        } catch (err) {
+            console.error('[VBuilder] Duplicate failed:', err);
+        }
+    }
+
+    function openImageUpload(section, fieldKey) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.addEventListener('change', async () => {
+            if (!input.files || input.files.length === 0) return;
+            const formData = new FormData();
+            formData.append('file', input.files[0]);
+            formData.append('_token', state.config.csrf_token);
+            try {
+                const response = await fetch(state.config.routes.upload, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-CSRF-TOKEN': state.config.csrf_token,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                    },
+                    body: formData,
+                });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const data = await response.json();
+                applyPendingChange(section.id, s => {
+                    ensurePath(s, ['content']);
+                    s.content[fieldKey] = data.path;
+                });
+                renderTraits(state.selectedSectionId);
+                postToIframe({ type: 'image-update', sectionId: section.id, fieldKey, url: data.url });
+            } catch (err) {
+                console.error('[VBuilder] Upload failed:', err);
+                alert('Upload failed: ' + err.message);
+            }
+        });
+        input.click();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Pending state
+    // ─────────────────────────────────────────────────────────────
+
+    function applyPendingChange(sectionId, mutator) {
+        const section = findSection(sectionId);
+        if (!section) return;
+        mutator(section);
+
+        if (!state.pending.sections[sectionId]) state.pending.sections[sectionId] = {};
+        state.pending.sections[sectionId].content = deepClone(section.content);
+        state.pending.sections[sectionId].style = deepClone(section.style);
+        state.pending.sections[sectionId].is_published = section.is_published;
+
+        markDirty();
+    }
+
+    function markDirty() {
+        state.dirty = true;
+        const badge = document.querySelector('[data-vb-dirty]');
+        if (badge) badge.hidden = false;
+    }
+
+    function clearDirty() {
+        state.dirty = false;
+        state.pending = { sections: {}, orderedIds: null };
+        const badge = document.querySelector('[data-vb-dirty]');
+        if (badge) badge.hidden = true;
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Save
+    // ─────────────────────────────────────────────────────────────
+
+    async function save() {
+        const payload = {};
+        if (state.pending.orderedIds) payload.ordered_ids = state.pending.orderedIds;
+        if (Object.keys(state.pending.sections).length) payload.sections = state.pending.sections;
+        if (Object.keys(payload).length === 0) return;
+
+        try {
+            const response = await fetch(state.config.routes.save, {
                 method: 'POST',
                 credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': self.config.csrf_token,
+                    'X-CSRF-TOKEN': state.config.csrf_token,
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
                 },
                 body: JSON.stringify(payload),
-            }).then(function (r) {
-                if (!r.ok) throw new Error('HTTP ' + r.status);
-                return r.json();
-            }).then(function () {
-                self.pendingUpdates = {};
-                self.pendingOrderedIds = null;
-                self.dirty = false;
-                var badge = document.querySelector('[data-vb-dirty]');
-                if (badge) badge.hidden = true;
-                self.reloadIframe();
-            }).catch(function (err) {
-                console.error('[VBuilder] Save failed:', err);
             });
-        },
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            await response.json();
+            clearDirty();
+            reloadIframe();
+        } catch (err) {
+            console.error('[VBuilder] Save failed:', err);
+            alert('Save failed: ' + err.message);
+        }
+    }
 
-        reloadIframe: function () {
-            if (!this.iframe) return;
-            var loading = document.querySelector('[data-vb-loading]');
-            if (loading) loading.classList.remove('vb-hidden');
-            this.iframeReady = false;
-            var src = this.iframe.src.split('#')[0];
-            this.iframe.src = src + (src.indexOf('?') === -1 ? '?' : '&') + '_vb=' + Date.now();
-        },
+    function reloadIframe() {
+        if (!state.iframe) return;
+        const loading = document.querySelector('[data-vb-loading]');
+        if (loading) loading.classList.remove('vb-hidden');
+        state.iframeReady = false;
+        const src = state.iframe.src.split('#')[0];
+        state.iframe.src = src + (src.indexOf('?') === -1 ? '?' : '&') + '_vb=' + Date.now();
+    }
 
-        postToIframe: function (message) {
-            if (!this.iframe || !this.iframe.contentWindow) return;
-            var payload = Object.assign({ source: 'vb-parent' }, message);
-            this.iframe.contentWindow.postMessage(payload, this.origin);
-        },
+    // ─────────────────────────────────────────────────────────────
+    // Iframe messaging
+    // ─────────────────────────────────────────────────────────────
 
-        openModal: function (name) {
-            var modal = document.querySelector('[data-vb-modal="' + name + '"]');
-            if (modal) modal.classList.add('vb-modal-open');
-            document.querySelectorAll('[data-vb-modal-close]').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    modal.classList.remove('vb-modal-open');
-                }, { once: true });
-            });
-        },
+    function postToIframe(message) {
+        if (!state.iframe || !state.iframe.contentWindow) return;
+        state.iframe.contentWindow.postMessage(
+            Object.assign({ source: 'vb-parent' }, message),
+            window.location.origin,
+        );
+    }
 
-        toggleNavigator: function () {
-            var panel = document.querySelector('[data-vb-navigator]');
-            if (panel) panel.classList.toggle('vb-navigator-open');
-        },
-    };
+    function initIframeMessaging() {
+        window.addEventListener('message', event => {
+            if (event.origin !== window.location.origin) return;
+            const msg = event.data;
+            if (!msg || msg.source !== 'vb-iframe') return;
+
+            switch (msg.type) {
+                case 'loaded': {
+                    state.iframeReady = true;
+                    const loading = document.querySelector('[data-vb-loading]');
+                    if (loading) loading.classList.add('vb-hidden');
+                    break;
+                }
+                case 'section-clicked':
+                case 'field-focused':
+                    renderTraits(msg.sectionId);
+                    break;
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Toolbar
+    // ─────────────────────────────────────────────────────────────
+
+    function bindToolbar() {
+        document.querySelectorAll('[data-vb-action]').forEach(btn => {
+            btn.addEventListener('click', () => handleToolbar(btn.getAttribute('data-vb-action')));
+        });
+        document.querySelectorAll('[data-vb-device]').forEach(btn => {
+            btn.addEventListener('click', () => setDevice(btn.getAttribute('data-vb-device'), btn));
+        });
+
+        window.addEventListener('beforeunload', event => {
+            if (state.dirty) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+        });
+
+        document.addEventListener('keydown', event => {
+            const cmd = event.ctrlKey || event.metaKey;
+            if (!cmd) return;
+            if (event.key.toLowerCase() === 's') {
+                event.preventDefault();
+                save();
+            }
+        });
+    }
+
+    function handleToolbar(action) {
+        if (action === 'save') save();
+        else if (action === 'reload') reloadIframe();
+    }
+
+    function setDevice(mode, btn) {
+        const viewport = document.querySelector('[data-vb-viewport]');
+        if (!viewport) return;
+        viewport.classList.remove('vb-device-tablet', 'vb-device-mobile');
+        if (mode === 'tablet' || mode === 'mobile') viewport.classList.add('vb-device-' + mode);
+        document.querySelectorAll('[data-vb-device]').forEach(b => b.classList.remove('vb-device-active'));
+        btn.classList.add('vb-device-active');
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Boot
+    // ─────────────────────────────────────────────────────────────
+
+    function boot() {
+        state.config = readBootstrap();
+        if (!state.config) return;
+
+        state.iframe = document.querySelector('[data-vb-iframe]');
+
+        renderBlockPalette();
+        bindToolbar();
+        initIframeMessaging();
+
+        window.VBuilder = { state, save, renderTraits };
+    }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', VBuilder.boot.bind(VBuilder));
+        document.addEventListener('DOMContentLoaded', boot);
     } else {
-        VBuilder.boot();
+        boot();
     }
 })();

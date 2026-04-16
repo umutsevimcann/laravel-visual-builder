@@ -6,6 +6,7 @@ namespace Umutsevimcann\VisualBuilder\Domain\Services;
 
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Database\Connection;
 use Illuminate\Database\ConnectionInterface;
 use Illuminate\Database\QueryException;
 use RuntimeException;
@@ -239,6 +240,13 @@ final class DesignTokenService
      */
     private function settingsTableExists(): bool
     {
+        // getSchemaBuilder() lives on the concrete Connection (not
+        // ConnectionInterface) — narrow the type before asking, and swallow
+        // any schema-access error so callers take the default-values path.
+        if (! $this->db instanceof Connection) {
+            return false;
+        }
+
         try {
             return $this->db->getSchemaBuilder()->hasTable($this->settingsTable());
         } catch (Throwable) {

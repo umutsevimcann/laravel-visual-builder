@@ -17,7 +17,7 @@
       $tokens     array — design tokens (unused in this view, client reads bootstrap)
 --}}
 @push('head')
-    <link rel="stylesheet" href="{{ asset('vendor/laravel-visual-builder/css/visual-builder.css') }}">
+    <link rel="stylesheet" href="{{ asset('vendor/visual-builder/css/visual-builder.css') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 @endpush
 
@@ -162,5 +162,5 @@
 <script type="application/json" data-vb-bootstrap>@json($bootstrap)</script>
 
 @push('scripts')
-    <script src="{{ asset('vendor/laravel-visual-builder/js/visual-builder.js') }}" defer></script>
+    <script src="{{ asset('vendor/visual-builder/js/visual-builder.js') }}" defer></script>
 @endpush
