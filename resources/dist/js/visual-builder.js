@@ -165,16 +165,35 @@
                     'Accept': 'application/json',
                 },
                 body: params.toString(),
-                redirect: 'manual',
             });
-            if (response.status >= 200 && response.status < 400) {
-                window.location.reload();
+            if (response.ok) {
+                const data = await response.json();
+                applyMutationResponse(data);
                 return;
             }
             console.error('[VBuilder] Create section failed:', response.status);
         } catch (err) {
             console.error('[VBuilder] Create section error:', err);
         }
+    }
+
+    /**
+     * Shared post-mutation refresh: replace local state.config.sections
+     * with the server's fresh list and reload the iframe preview.
+     * Called after create/duplicate/delete/move — eliminates full
+     * `window.location.reload()` calls that were destroying the editor's
+     * scroll position, selected tab, and undo history on every edit.
+     *
+     * @param {{sections?: Array}} data  Server response body
+     */
+    function applyMutationResponse(data) {
+        if (data && Array.isArray(data.sections)) {
+            state.config.sections = data.sections;
+        }
+        // Re-render block palette — singleton constraints (one-per-target)
+        // depend on which section types currently exist on the target.
+        renderBlockPalette();
+        reloadIframe();
     }
 
     /**
@@ -219,7 +238,13 @@
             });
             if (!response.ok) throw new Error('HTTP ' + response.status);
             clearDirty();
-            window.location.reload();
+            if (state.selectedSectionId === sectionId) {
+                state.selectedSectionId = null;
+                const traits = document.querySelector('[data-vb-traits]');
+                if (traits) setHtml(traits, '<div class="vb-empty"><i class="vb-icon vb-icon-pointer vb-empty-icon"></i><p class="vb-empty-text">Click a section in the preview to edit.</p></div>');
+            }
+            const data = await response.json();
+            applyMutationResponse(data);
         } catch (err) {
             console.error('[VBuilder] Delete section failed:', err);
             alert('Delete failed: ' + err.message);
@@ -241,7 +266,8 @@
                 body: '_token=' + encodeURIComponent(state.config.csrf_token),
             });
             if (!response.ok) throw new Error('HTTP ' + response.status);
-            window.location.reload();
+            const data = await response.json();
+            applyMutationResponse(data);
         } catch (err) {
             console.error('[VBuilder] Duplicate section failed:', err);
             alert('Duplicate failed: ' + err.message);
@@ -279,7 +305,8 @@
                 body: JSON.stringify({ ordered_ids: orderedIds }),
             });
             if (!response.ok) throw new Error('HTTP ' + response.status);
-            window.location.reload();
+            const data = await response.json();
+            applyMutationResponse(data);
         } catch (err) {
             console.error('[VBuilder] Move section failed:', err);
             alert('Move failed: ' + err.message);
@@ -867,7 +894,14 @@
                     'Accept': 'application/json',
                 },
             });
-            if (response.ok) window.location.reload();
+            if (!response.ok) return;
+            if (state.selectedSectionId === section.id) {
+                state.selectedSectionId = null;
+                const traits = document.querySelector('[data-vb-traits]');
+                if (traits) setHtml(traits, '<div class="vb-empty"><i class="vb-icon vb-icon-pointer vb-empty-icon"></i><p class="vb-empty-text">Click a section in the preview to edit.</p></div>');
+            }
+            const data = await response.json();
+            applyMutationResponse(data);
         } catch (err) {
             console.error('[VBuilder] Delete failed:', err);
         }
@@ -883,10 +917,13 @@
                     'X-CSRF-TOKEN': state.config.csrf_token,
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
+                    'Content-Type': 'application/x-www-form-urlencoded',
                 },
-                redirect: 'manual',
+                body: '_token=' + encodeURIComponent(state.config.csrf_token),
             });
-            if (response.status >= 200 && response.status < 400) window.location.reload();
+            if (!response.ok) return;
+            const data = await response.json();
+            applyMutationResponse(data);
         } catch (err) {
             console.error('[VBuilder] Duplicate failed:', err);
         }

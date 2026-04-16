@@ -31,6 +31,37 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.2.2] — 2026-04-16
+
+### Fixed
+
+- **Admin page no longer full-reloads on every mutation.** Every
+  create/duplicate/delete/move used to call `window.location.reload()`
+  which obliterated the editor's scroll position, selected tab, undo
+  history, and open modals. Real-world feedback: "Bir şey eklerken
+  sayfayı yenilemeden ekleyemiyor." Now the admin page stays put and
+  only the iframe preview refreshes — exactly matches Elementor's
+  editor behavior.
+
+### Changed
+
+- `BuilderController::store`, `duplicate`, `destroy`, and `save`
+  JSON responses now include a fresh `sections` array — the target's
+  full section list after the mutation. The JS client replaces
+  `state.config.sections` in one step, re-renders the block palette
+  (for singleton constraint checks), and reloads the iframe. No extra
+  round-trip GET needed.
+- `applyMutationResponse(data)` is the shared client-side helper for
+  post-mutation state sync. All six mutation paths route through it.
+- Selected section clears when its owner is deleted — traits panel
+  resets to the empty "Click a section to edit" state instead of
+  showing stale fields.
+
+### Tests
+
+- 4 new feature tests cover the `sections` response contract for each
+  mutation endpoint. 54 tests total (was 50).
+
 ## [0.2.1] — 2026-04-16
 
 Real-use feedback on v0.2.0 exposed a UX gap: editors clicked on text

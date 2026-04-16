@@ -313,3 +313,100 @@ it('rejects uploads with disallowed MIME types', function (): void {
         'file' => $file,
     ])->assertStatus(422);
 });
+
+/*
+|--------------------------------------------------------------------------
+| Mutation responses include a fresh `sections` array (v0.2.2 contract)
+|--------------------------------------------------------------------------
+| Store/duplicate/destroy/save all return the full current section list
+| for the target so the JS client can replace state.config.sections in
+| one step — no window.location.reload() needed. Without this contract
+| the admin page reloaded on every mutation, destroying scroll position,
+| selected tab, and undo history.
+*/
+
+it('store endpoint returns fresh sections list after create', function (): void {
+    $page = makeTestPage();
+
+    $response = $this->postJson("/visual-builder/testpage/{$page->id}/sections", [
+        'type' => 'fake_gallery',
+        'instance_key' => 'a',
+    ]);
+
+    $response->assertOk()
+        ->assertJsonStructure(['success', 'section_id', 'sort_order', 'sections'])
+        ->assertJsonCount(1, 'sections');
+
+    expect($response->json('sections.0.type'))->toBe('fake_gallery')
+        ->and($response->json('sections.0.id'))->toBe($response->json('section_id'));
+});
+
+it('duplicate endpoint returns fresh sections list with both original and clone', function (): void {
+    $page = makeTestPage();
+
+    $source = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'a',
+        'is_published' => true, 'sort_order' => 0,
+        'content' => ['title' => 'Src'], 'style' => [],
+    ]);
+
+    $response = $this->postJson(
+        "/visual-builder/testpage/{$page->id}/sections/{$source->id}/duplicate",
+    );
+
+    $response->assertOk()->assertJsonCount(2, 'sections');
+    expect($response->json('sections.0.id'))->toBe($source->id);
+});
+
+it('destroy endpoint returns fresh sections list without the deleted row', function (): void {
+    $page = makeTestPage();
+
+    $a = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'a',
+        'is_published' => true, 'sort_order' => 0,
+        'content' => [], 'style' => [],
+    ]);
+    $b = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'b',
+        'is_published' => true, 'sort_order' => 1,
+        'content' => [], 'style' => [],
+    ]);
+
+    $response = $this->deleteJson(
+        "/visual-builder/testpage/{$page->id}/sections/{$a->id}",
+    );
+
+    $response->assertOk()->assertJsonCount(1, 'sections');
+    expect($response->json('sections.0.id'))->toBe($b->id);
+});
+
+it('save endpoint returns fresh sections with updated sort_order after reorder', function (): void {
+    $page = makeTestPage();
+
+    $a = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'a',
+        'is_published' => true, 'sort_order' => 0,
+        'content' => [], 'style' => [],
+    ]);
+    $b = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'b',
+        'is_published' => true, 'sort_order' => 1,
+        'content' => [], 'style' => [],
+    ]);
+
+    $response = $this->postJson("/visual-builder/testpage/{$page->id}/save", [
+        'ordered_ids' => [$b->id, $a->id],
+    ]);
+
+    $response->assertOk()->assertJsonCount(2, 'sections');
+    // Cevaptaki sira 0, 1 — id'ler yeni ordered_ids'e gore
+    expect($response->json('sections.0.id'))->toBe($b->id)
+        ->and($response->json('sections.0.sort_order'))->toBe(0)
+        ->and($response->json('sections.1.id'))->toBe($a->id)
+        ->and($response->json('sections.1.sort_order'))->toBe(1);
+});

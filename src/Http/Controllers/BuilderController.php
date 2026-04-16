@@ -85,6 +85,10 @@ final class BuilderController extends BaseController
             'success' => true,
             'updated' => $result['updated'],
             'reordered' => $result['reordered'],
+            // Fresh sections list — reorder'dan sonra sort_order'lar
+            // degismis olabilir, client local state'i bu response ile
+            // sync'lesin (window.location.reload yerine).
+            'sections' => $this->serializeSections($target),
         ]);
     }
 
@@ -136,6 +140,10 @@ final class BuilderController extends BaseController
                 'success' => true,
                 'section_id' => $section->id,
                 'sort_order' => $section->sort_order,
+                // Full fresh list — client replaces its local state with this,
+                // no need for an extra round-trip GET. Includes the bump of
+                // sort_order'lari of sections shifted by the position-aware insert.
+                'sections' => $this->serializeSections($target),
             ]);
         }
 
@@ -157,12 +165,14 @@ final class BuilderController extends BaseController
         $this->assertSectionBelongsTo($section, $targetType, $targetId);
 
         $clone = $action->execute($section);
+        $target = $this->resolveTarget($targetType, $targetId);
 
         return request()->expectsJson()
             ? response()->json([
                 'success' => true,
                 'section_id' => $clone->id,
                 'sort_order' => $clone->sort_order,
+                'sections' => $this->serializeSections($target),
             ])
             : redirect()->back();
     }
@@ -180,9 +190,16 @@ final class BuilderController extends BaseController
 
         $action->execute($section);
 
-        return request()->expectsJson()
-            ? response()->json(['success' => true])
-            : redirect()->back();
+        if (request()->expectsJson()) {
+            $target = $this->resolveTarget($targetType, $targetId);
+
+            return response()->json([
+                'success' => true,
+                'sections' => $this->serializeSections($target),
+            ]);
+        }
+
+        return redirect()->back();
     }
 
     /**
@@ -228,6 +245,30 @@ final class BuilderController extends BaseController
         }
 
         return $model;
+    }
+
+    /**
+     * Serialize the target's sections to the shape the client
+     * `state.config.sections` expects. After every mutation we include
+     * this in the response so the client replaces its local state in
+     * one step — no extra GET round-trip, no `window.location.reload()`.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function serializeSections(Model $target): array
+    {
+        return $this->repository->forTarget($target)
+            ->map(static fn (BuilderSection $s): array => [
+                'id' => $s->id,
+                'type' => $s->type,
+                'instance_key' => $s->instance_key,
+                'content' => $s->content ?? [],
+                'style' => $s->style ?? [],
+                'is_published' => (bool) $s->is_published,
+                'sort_order' => (int) $s->sort_order,
+            ])
+            ->values()
+            ->all();
     }
 
     /**
