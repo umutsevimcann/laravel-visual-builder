@@ -1,0 +1,30 @@
+/.idea
+/.vscode
+/vendor
+/node_modules
+/build
+composer.lock
+package-lock.json
+docs/.vitepress/cache
+docs/.vitepress/dist
+.phpunit.result.cache
+.phpunit.cache
+phpstan-baseline.neon.bak
+.phpactor.json
+
+# OS / editor scratch files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Test output
+coverage/
+coverage.xml
+.coverage/
+
+# Local overrides
+.env
+.env.local
+*.local.php

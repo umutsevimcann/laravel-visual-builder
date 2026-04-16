@@ -1,0 +1,76 @@
+{
+    "name": "umutsevimcann/laravel-visual-builder",
+    "description": "Modern visual page builder for Laravel — drag-drop section editor with live iframe preview, global design tokens, entrance animations, copy/paste, revisions, and responsive controls. Polymorphic — attach to any Eloquent model.",
+    "keywords": [
+        "laravel",
+        "page-builder",
+        "visual-editor",
+        "cms",
+        "drag-drop",
+        "wysiwyg",
+        "design-system",
+        "live-preview"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/umutsevimcann/laravel-visual-builder",
+    "support": {
+        "issues": "https://github.com/umutsevimcann/laravel-visual-builder/issues",
+        "source": "https://github.com/umutsevimcann/laravel-visual-builder"
+    },
+    "authors": [
+        {
+            "name": "Umut Sevimcan",
+            "homepage": "https://github.com/umutsevimcann",
+            "role": "Developer"
+        }
+    ],
+    "require": {
+        "php": "^8.2",
+        "spatie/laravel-package-tools": "^1.16",
+        "illuminate/contracts": "^11.0|^12.0"
+    },
+    "require-dev": {
+        "laravel/pint": "^1.17",
+        "nunomaduro/collision": "^8.0",
+        "larastan/larastan": "^2.9|^3.0",
+        "orchestra/testbench": "^9.0|^10.0",
+        "pestphp/pest": "^3.0",
+        "pestphp/pest-plugin-arch": "^3.0",
+        "pestphp/pest-plugin-laravel": "^3.0",
+        "phpstan/phpstan-deprecation-rules": "^1.1|^2.0",
+        "phpstan/phpstan-phpunit": "^1.3|^2.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Umutsevimcann\\VisualBuilder\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Umutsevimcann\\VisualBuilder\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "analyse": "vendor/bin/phpstan analyse",
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "format": "vendor/bin/pint"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Umutsevimcann\\VisualBuilder\\VisualBuilderServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
