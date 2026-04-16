@@ -89,47 +89,82 @@ final class BuilderController extends BaseController
     }
 
     /**
-     * Create a new section on the target. Accepts the type key and an
-     * optional instance key for multi-instance section types.
+     * Create a new section on the target. Accepts the type key, an optional
+     * instance key for multi-instance section types, and an optional
+     * `after_section_id` for position-aware insertion (Elementor-style
+     * `+` inserter between existing sections).
+     *
+     * Response is JSON when the client asks for JSON — the inline inserter
+     * uses that to trigger an iframe reload without a full page redirect.
      */
     public function store(
         Request $request,
         CreateSection $action,
         string $targetType,
         int $targetId,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         $validated = $request->validate([
             'type' => ['required', 'string'],
             'instance_key' => ['nullable', 'string', 'max:60'],
+            // Optional: insert right after the given sibling section's
+            // sort_order. Absent = append to end (original behaviour).
+            'after_section_id' => ['nullable', 'integer'],
         ]);
 
         $target = $this->resolveTarget($targetType, $targetId);
 
-        $action->execute(
+        $afterSortOrder = null;
+        if (! empty($validated['after_section_id'])) {
+            $afterSection = BuilderSection::query()->find($validated['after_section_id']);
+            // Only honour the hint when the sibling actually belongs to
+            // this target — silently fall back to append otherwise. A
+            // mismatched ID isn't a reason to 500 the editor.
+            if ($afterSection !== null && (int) $afterSection->builder_id === $targetId) {
+                $afterSortOrder = (int) $afterSection->sort_order;
+            }
+        }
+
+        $section = $action->execute(
             $target,
             $validated['type'],
             $validated['instance_key'] ?? '__default__',
+            $afterSortOrder,
         );
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'success' => true,
+                'section_id' => $section->id,
+                'sort_order' => $section->sort_order,
+            ]);
+        }
 
         return redirect()->back();
     }
 
     /**
-     * Duplicate an existing section.
+     * Duplicate an existing section. Returns JSON for AJAX callers
+     * (inline hover toolbar), redirect for form-POST callers.
      */
     public function duplicate(
         DuplicateSection $action,
         string $targetType,
         int $targetId,
         BuilderSection $section,
-    ): RedirectResponse {
+    ): RedirectResponse|JsonResponse {
         // Guard: verify the route's target matches the section's stored target.
         // Prevents cross-target manipulation via mismatched route params.
         $this->assertSectionBelongsTo($section, $targetType, $targetId);
 
-        $action->execute($section);
+        $clone = $action->execute($section);
 
-        return redirect()->back();
+        return request()->expectsJson()
+            ? response()->json([
+                'success' => true,
+                'section_id' => $clone->id,
+                'sort_order' => $clone->sort_order,
+            ])
+            : redirect()->back();
     }
 
     /**

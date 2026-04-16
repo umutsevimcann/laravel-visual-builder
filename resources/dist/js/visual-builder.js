@@ -73,6 +73,10 @@
         dirty: false,
         activeTab: 'content',
         selectedSectionId: null,
+        // Inline insert flow (iframe `+` → parent palette → createSection):
+        // while non-null, the next block-palette click creates a section
+        // right after this sibling id (0 = prepend before first section).
+        pendingInsertAfter: null,
         pending: {
             sections: {},
             orderedIds: null,
@@ -137,8 +141,19 @@
         if (state.dirty && !confirm('Discard unsaved changes and add a new section?')) {
             return;
         }
-        const body = 'type=' + encodeURIComponent(typeKey)
-            + '&_token=' + encodeURIComponent(state.config.csrf_token);
+
+        // When the iframe `+` inserter was clicked, `state.pendingInsertAfter`
+        // holds the sibling section id — pass it along so the new section
+        // lands right after that sibling instead of appending to the end.
+        const afterId = state.pendingInsertAfter;
+        state.pendingInsertAfter = null;
+        clearInsertMode();
+
+        const params = new URLSearchParams();
+        params.append('type', typeKey);
+        params.append('_token', state.config.csrf_token);
+        if (afterId != null) params.append('after_section_id', String(afterId));
+
         try {
             const response = await fetch(state.config.routes.store, {
                 method: 'POST',
@@ -149,7 +164,7 @@
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
                 },
-                body,
+                body: params.toString(),
                 redirect: 'manual',
             });
             if (response.status >= 200 && response.status < 400) {
@@ -159,6 +174,115 @@
             console.error('[VBuilder] Create section failed:', response.status);
         } catch (err) {
             console.error('[VBuilder] Create section error:', err);
+        }
+    }
+
+    /**
+     * Enter "insert mode": highlight the left palette so the editor knows
+     * the next block click will insert at the chosen position. Called by
+     * the iframe's `+` inserter via postMessage.
+     */
+    function enterInsertMode(afterSectionId) {
+        state.pendingInsertAfter = afterSectionId;
+        const panel = document.querySelector('.vb-panel-left');
+        if (panel) panel.classList.add('vb-insert-mode');
+    }
+
+    function clearInsertMode() {
+        const panel = document.querySelector('.vb-panel-left');
+        if (panel) panel.classList.remove('vb-insert-mode');
+    }
+
+    /**
+     * Delete a section: confirm, DELETE /sections/{id}, reload iframe.
+     * The template route uses `0` as a placeholder for the section id —
+     * swap it in at call time. This keeps the template URL opaque to the
+     * client while still letting us build final URLs safely.
+     */
+    async function deleteSection(sectionId) {
+        if (state.dirty) {
+            if (!confirm('Discard unsaved changes and delete this section?')) return;
+        } else if (!confirm('Delete this section? This cannot be undone.')) {
+            return;
+        }
+
+        const url = state.config.routes.destroy_template.replace(/\/0(\?|$)/, '/' + sectionId + '$1');
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                credentials: 'same-origin',
+                headers: {
+                    'X-CSRF-TOKEN': state.config.csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+            });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            clearDirty();
+            window.location.reload();
+        } catch (err) {
+            console.error('[VBuilder] Delete section failed:', err);
+            alert('Delete failed: ' + err.message);
+        }
+    }
+
+    async function duplicateSection(sectionId) {
+        const url = state.config.routes.duplicate_template.replace(/\/0(\/duplicate|$)/, '/' + sectionId + '$1');
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': state.config.csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: '_token=' + encodeURIComponent(state.config.csrf_token),
+            });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            window.location.reload();
+        } catch (err) {
+            console.error('[VBuilder] Duplicate section failed:', err);
+            alert('Duplicate failed: ' + err.message);
+        }
+    }
+
+    /**
+     * Move a section up/down by one position. Computes the new
+     * ordered_ids array from the current bootstrap state and POSTs it
+     * to the save endpoint. Iframe reloads with the fresh order.
+     */
+    async function moveSection(sectionId, direction) {
+        const sections = (state.config.sections || [])
+            .slice()
+            .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+        const idx = sections.findIndex(s => s.id === sectionId);
+        if (idx < 0) return;
+
+        const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+        if (targetIdx < 0 || targetIdx >= sections.length) return;
+
+        [sections[idx], sections[targetIdx]] = [sections[targetIdx], sections[idx]];
+        const orderedIds = sections.map(s => s.id);
+
+        try {
+            const response = await fetch(state.config.routes.save, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': state.config.csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ ordered_ids: orderedIds }),
+            });
+            if (!response.ok) throw new Error('HTTP ' + response.status);
+            window.location.reload();
+        } catch (err) {
+            console.error('[VBuilder] Move section failed:', err);
+            alert('Move failed: ' + err.message);
         }
     }
 
@@ -845,6 +969,24 @@
                 case 'section-clicked':
                 case 'field-focused':
                     renderTraits(msg.sectionId);
+                    break;
+                case 'insert-requested':
+                    // Iframe `+` inserter clicked → enter "insert mode".
+                    // The next block-palette click will create a section
+                    // right after `msg.afterSectionId` (null = prepend).
+                    enterInsertMode(msg.afterSectionId);
+                    break;
+                case 'duplicate-section':
+                    duplicateSection(msg.sectionId);
+                    break;
+                case 'delete-section':
+                    deleteSection(msg.sectionId);
+                    break;
+                case 'move-up':
+                    moveSection(msg.sectionId, 'up');
+                    break;
+                case 'move-down':
+                    moveSection(msg.sectionId, 'down');
                     break;
             }
         });

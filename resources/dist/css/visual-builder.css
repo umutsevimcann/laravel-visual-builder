@@ -310,6 +310,34 @@
    Block palette (left)
    ================================================================ */
 
+/*
+ * Insert-mode styling: when the iframe `+` inserter is clicked, the
+ * parent sets `.vb-insert-mode` on the left panel. The blue ring +
+ * pulsing tip hint the editor to "pick a block" — the next palette
+ * click consumes state.pendingInsertAfter server-side.
+ */
+.vb-panel-left.vb-insert-mode {
+    box-shadow: inset 0 0 0 2px #2563eb;
+    animation: vb-insert-pulse 2s ease-in-out infinite;
+}
+
+.vb-panel-left.vb-insert-mode .vb-panel-header {
+    background: rgba(37, 99, 235, 0.08);
+}
+
+.vb-panel-left.vb-insert-mode .vb-panel-header::after {
+    content: ' — pick a block to insert';
+    color: #2563eb;
+    font-weight: 500;
+    font-size: 11px;
+    margin-left: 4px;
+}
+
+@keyframes vb-insert-pulse {
+    0%, 100% { box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 0.6); }
+    50%      { box-shadow: inset 0 0 0 2px rgba(37, 99, 235, 1); }
+}
+
 .vb-block {
     display: flex;
     align-items: center;

@@ -87,6 +87,80 @@ it('allows multiple instances for non-singleton types', function (): void {
     expect(BuilderSection::query()->count())->toBe(2);
 });
 
+it('inserts a new section after a given sibling when after_section_id is provided', function (): void {
+    $page = makeTestPage();
+
+    // Seed 3 existing sections at sort_order 0, 1, 2
+    $first = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'a',
+        'is_published' => true, 'sort_order' => 0,
+        'content' => [], 'style' => [],
+    ]);
+    $middle = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'b',
+        'is_published' => true, 'sort_order' => 1,
+        'content' => [], 'style' => [],
+    ]);
+    $last = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'c',
+        'is_published' => true, 'sort_order' => 2,
+        'content' => [], 'style' => [],
+    ]);
+
+    // Insert between $first (sort_order=0) and $middle (sort_order=1)
+    $response = $this->postJson(
+        "/visual-builder/testpage/{$page->id}/sections",
+        [
+            'type' => 'fake_gallery',
+            'instance_key' => 'inserted',
+            'after_section_id' => $first->id,
+        ],
+    );
+
+    $response->assertOk()->assertJsonPath('success', true);
+    $newSortOrder = $response->json('sort_order');
+
+    expect($newSortOrder)->toBe(1)
+        ->and($first->fresh()->sort_order)->toBe(0)   // unchanged
+        ->and($middle->fresh()->sort_order)->toBe(2)  // bumped +1
+        ->and($last->fresh()->sort_order)->toBe(3);   // bumped +1
+});
+
+it('silently falls back to append when after_section_id points to a different target', function (): void {
+    $page = makeTestPage();
+    $other = makeTestPage();
+
+    $foreign = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $other->id,
+        'type' => 'fake_gallery', 'instance_key' => 'x',
+        'is_published' => true, 'sort_order' => 0,
+        'content' => [], 'style' => [],
+    ]);
+
+    $existing = BuilderSection::query()->create([
+        'builder_type' => 'testpage', 'builder_id' => $page->id,
+        'type' => 'fake_gallery', 'instance_key' => 'y',
+        'is_published' => true, 'sort_order' => 5,
+        'content' => [], 'style' => [],
+    ]);
+
+    $response = $this->postJson(
+        "/visual-builder/testpage/{$page->id}/sections",
+        [
+            'type' => 'fake_gallery',
+            'instance_key' => 'new',
+            'after_section_id' => $foreign->id,
+        ],
+    );
+
+    $response->assertOk();
+    // Foreign id ignored → new section appends at existing max+1 = 6
+    expect($response->json('sort_order'))->toBe(6);
+});
+
 it('POST /{type}/{id}/save persists per-section content updates', function (): void {
     $page = makeTestPage();
 
