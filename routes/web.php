@@ -22,7 +22,7 @@ use Umutsevimcann\VisualBuilder\Http\Controllers\DesignTokenController;
 |
 */
 
-Route::controller(BuilderController::class)->group(function (): void {
+Route::controller(BuilderController::class)->group(static function (): void {
     Route::get('{targetType}/{targetId}', 'show')
         ->name('show')
         ->whereAlpha('targetType')

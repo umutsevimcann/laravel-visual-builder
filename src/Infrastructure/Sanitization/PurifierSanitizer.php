@@ -31,8 +31,8 @@ final class PurifierSanitizer implements SanitizerInterface
      * Includes: typical body content and inline formatting.
      */
     private const FALLBACK_ALLOWED_TAGS = '<p><br><strong><em><u><s><code><pre><blockquote>'
-        . '<h1><h2><h3><h4><h5><h6><ul><ol><li><a><img><hr><span><div>'
-        . '<table><thead><tbody><tr><th><td><mark><small><sub><sup>';
+        .'<h1><h2><h3><h4><h5><h6><ul><ol><li><a><img><hr><span><div>'
+        .'<table><thead><tbody><tr><th><td><mark><small><sub><sup>';
 
     public function purify(string $html): string
     {

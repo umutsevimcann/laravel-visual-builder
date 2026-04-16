@@ -45,8 +45,8 @@ final class ApplyBuilderLayout
 
     /**
      * @return array{updated: array<int, int>, reordered: bool}
-     *         updated  = BuilderSection IDs that received at least one patch
-     *         reordered = whether sort order was changed in this call
+     *                                                          updated  = BuilderSection IDs that received at least one patch
+     *                                                          reordered = whether sort order was changed in this call
      */
     public function execute(Model $target, BuilderLayoutData $data): array
     {

@@ -45,7 +45,7 @@ final class DuplicateSection
             'builder_type' => $source->builder_type,
             'builder_id' => $source->builder_id,
             'type' => $source->type,
-            'instance_key' => $source->instance_key . '_copy_' . time(),
+            'instance_key' => $source->instance_key.'_copy_'.time(),
             'is_published' => false,
             'sort_order' => $this->nextSortOrder($source),
             'content' => $source->content,

@@ -37,7 +37,7 @@ final class UploadImageRequest extends FormRequest
             'file' => [
                 'required',
                 'file',
-                'mimes:' . implode(',', $allowedMimes),
+                'mimes:'.implode(',', $allowedMimes),
                 "max:{$maxKb}",
             ],
             'directory' => ['nullable', 'string', 'max:100', 'regex:/^[a-z0-9_\/-]*$/i'],

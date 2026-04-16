@@ -104,7 +104,7 @@ final class UpdateSectionContent
      * Handles the LinkField quirk (two sibling keys: {key}_url + {key}_label)
      * and the standard single-key case for all other field types.
      *
-     * @return array<string, mixed>|null  null = field not present in input; skip.
+     * @return array<string, mixed>|null null = field not present in input; skip.
      */
     private function collectFieldInput(FieldDefinition $field, array $input): null|array
     {
@@ -140,7 +140,7 @@ final class UpdateSectionContent
      *
      * @param  array<string, bool>  $current
      * @param  array<string, mixed>  $incoming
-     * @param  array<int, string>    $allowedKeys
+     * @param  array<int, string>  $allowedKeys
      * @return array<string, bool>
      */
     private function mergeVisibility(array $current, array $incoming, array $allowedKeys): array
@@ -159,8 +159,8 @@ final class UpdateSectionContent
      * keys and allowed CSS property whitelist.
      *
      * @param  array<string, array<string, string>>  $current
-     * @param  array<string, mixed>                  $incoming
-     * @param  array<int, string>                    $allowedFieldKeys
+     * @param  array<string, mixed>  $incoming
+     * @param  array<int, string>  $allowedFieldKeys
      * @return array<string, array<string, string>>
      */
     private function mergeElementStyles(array $current, array $incoming, array $allowedFieldKeys): array

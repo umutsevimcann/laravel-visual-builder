@@ -107,7 +107,7 @@ final class DesignTokenService
             return '';
         }
 
-        return ":root {\n" . implode("\n", $lines) . "\n}";
+        return ":root {\n".implode("\n", $lines)."\n}";
     }
 
     /**

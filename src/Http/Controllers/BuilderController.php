@@ -6,6 +6,7 @@ namespace Umutsevimcann\VisualBuilder\Http\Controllers;
 
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -178,7 +179,7 @@ final class BuilderController extends BaseController
      */
     private function resolveTarget(string $targetType, int $targetId): Model
     {
-        $morphMap = \Illuminate\Database\Eloquent\Relations\Relation::morphMap();
+        $morphMap = Relation::morphMap();
 
         $class = $morphMap[$targetType] ?? null;
         if (! is_string($class) || ! is_subclass_of($class, Model::class)) {
@@ -202,7 +203,7 @@ final class BuilderController extends BaseController
         string $targetType,
         int $targetId,
     ): void {
-        $morphMap = \Illuminate\Database\Eloquent\Relations\Relation::morphMap();
+        $morphMap = Relation::morphMap();
         $expected = $morphMap[$targetType] ?? null;
 
         if ($section->builder_type !== $expected || $section->builder_id !== $targetId) {

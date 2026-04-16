@@ -102,6 +102,6 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             ->prefix($prefix)
             ->middleware($middleware)
             ->name($namePrefix)
-            ->group(__DIR__ . '/../routes/web.php');
+            ->group(__DIR__.'/../routes/web.php');
     }
 }

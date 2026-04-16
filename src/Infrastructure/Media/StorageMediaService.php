@@ -40,11 +40,11 @@ final class StorageMediaService implements MediaServiceInterface
 
         $targetDir = $base;
         if ($sub !== '') {
-            $targetDir .= '/' . $sub;
+            $targetDir .= '/'.$sub;
         }
 
-        $name = Str::uuid()->toString() . '.' . $this->safeExtension($file);
-        $path = $targetDir . '/' . $name;
+        $name = Str::uuid()->toString().'.'.$this->safeExtension($file);
+        $path = $targetDir.'/'.$name;
 
         $this->storage->disk($disk)->putFileAs($targetDir, $file, $name);
 

@@ -23,11 +23,11 @@ final readonly class BuilderLayoutData
 {
     /**
      * @param  array<int, int>|null  $orderedIds
-     *         New sort order as a sequence of BuilderSection IDs, or null when
-     *         the user did not change the order in this save.
+     *                                            New sort order as a sequence of BuilderSection IDs, or null when
+     *                                            the user did not change the order in this save.
      * @param  array<int, array{content?: array<string, mixed>, style?: array<string, mixed>, is_published?: bool}>|null  $sections
-     *         Per-section updates keyed by BuilderSection ID. Each payload
-     *         may contain any subset of content/style/is_published keys.
+     *                                                                                                                               Per-section updates keyed by BuilderSection ID. Each payload
+     *                                                                                                                               may contain any subset of content/style/is_published keys.
      */
     public function __construct(
         public array|null $orderedIds,
