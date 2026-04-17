@@ -31,6 +31,11 @@ final class VideoWidget extends AbstractAtomicWidget
         return 'video';
     }
 
+    public function category(): string
+    {
+        return 'media';
+    }
+
     public function label(): string
     {
         return 'Video';

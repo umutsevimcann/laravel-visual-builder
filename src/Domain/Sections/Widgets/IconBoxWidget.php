@@ -35,6 +35,11 @@ final class IconBoxWidget extends AbstractAtomicWidget
         return 'icon_box';
     }
 
+    public function category(): string
+    {
+        return 'layout';
+    }
+
     public function label(): string
     {
         return 'Icon Box';

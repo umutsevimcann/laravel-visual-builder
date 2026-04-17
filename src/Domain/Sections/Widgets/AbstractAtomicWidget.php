@@ -72,4 +72,27 @@ abstract class AbstractAtomicWidget implements SectionTypeInterface
     {
         return 'visual-builder::widgets.'.$this->key();
     }
+
+    /**
+     * Block-palette grouping key. Drives which category tab this widget
+     * lands in inside the admin's redesigned palette (v0.5.0).
+     *
+     * Package widgets ship with four canonical categories:
+     *   - 'basic'    — text + interaction primitives (Heading, Paragraph, Button, Icon)
+     *   - 'media'    — images + embeds (Image, Video)
+     *   - 'layout'   — spacing + containers (Spacer, Divider, Columns, IconBox)
+     *
+     * Subclasses override to pick a different bucket. The admin JS
+     * treats the returned string as opaque — any value creates a new
+     * tab when seen for the first time — so host apps can introduce
+     * their own categories ('commerce', 'marketing', …) on custom
+     * widgets without any registry change.
+     *
+     * Defaults to 'basic' so a freshly-scaffolded widget shows up
+     * somewhere sensible even if the author forgets to override.
+     */
+    public function category(): string
+    {
+        return 'basic';
+    }
 }

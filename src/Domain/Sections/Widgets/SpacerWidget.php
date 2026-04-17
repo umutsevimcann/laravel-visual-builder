@@ -28,6 +28,11 @@ final class SpacerWidget extends AbstractAtomicWidget
         return 'spacer';
     }
 
+    public function category(): string
+    {
+        return 'layout';
+    }
+
     public function label(): string
     {
         return 'Spacer';

@@ -29,6 +29,11 @@ final class ImageWidget extends AbstractAtomicWidget
         return 'image';
     }
 
+    public function category(): string
+    {
+        return 'media';
+    }
+
     public function label(): string
     {
         return 'Image';

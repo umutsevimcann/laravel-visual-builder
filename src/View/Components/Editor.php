@@ -135,6 +135,11 @@ final class Editor extends Component
                 'description' => $type->description(),
                 'icon' => $type->icon(),
                 'preview_image' => $type->previewImage(),
+                // Optional grouping key for the v0.5 block palette. Host
+                // apps on older section-type implementations that predate
+                // category() keep working — we default to 'general' so
+                // every type still renders a palette tile.
+                'category' => method_exists($type, 'category') ? (string) $type->category() : 'general',
                 'allows_multiple' => $type->allowsMultipleInstances(),
                 'is_deletable' => $type->isDeletable(),
                 'default_content' => $type->defaultContent(),

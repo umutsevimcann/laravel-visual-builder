@@ -38,6 +38,11 @@ final class ColumnsWidget extends AbstractAtomicWidget
         return 'columns';
     }
 
+    public function category(): string
+    {
+        return 'layout';
+    }
+
     public function label(): string
     {
         return 'Columns';

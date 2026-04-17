@@ -31,6 +31,56 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.5.0] — 2026-04-17
+
+### Added
+
+- **Block palette redesign — category tabs + card grid.** The left
+  panel now opens as a horizontal tab bar (Basic · Media · Layout ·
+  …) with a 2-column card grid underneath. Each widget card shows
+  the icon, the label, and is natively `draggable="true"` ready for
+  the drag-drop interactions shipping in v0.5.1. Matches the
+  layout Elementor / Gutenberg content editors use; host apps can
+  introduce their own category keys and a new tab appears
+  automatically.
+
+- **Optional `category()` method on atomic widgets.** Added to
+  `AbstractAtomicWidget` with a `'basic'` default — widgets override
+  to pick a tab. The Editor component serializes the category into
+  the bootstrap payload with a `method_exists()` fallback so
+  host-app section types that predate this release keep rendering
+  (they land in a `'general'` tab so they are still visible).
+
+### Categories for shipped widgets
+
+- **basic** — Heading, Paragraph, Button, Icon
+- **media** — Image, Video
+- **layout** — Spacer, Divider, Columns, IconBox
+
+### State + persistence
+
+- `state.activePaletteCategory` persists the chosen tab across
+  structural mutations. Creating / deleting a section no longer
+  resets the user to the first tab.
+
+- Card order inside a category preserves registry insertion order.
+  Categories themselves follow a canonical `basic → media → layout
+  → general` ordering; unknown host categories come last sorted
+  alphabetically.
+
+### Compatibility
+
+- Existing `.vb-block` / `.vb-block-icon` / etc. CSS stays in the
+  stylesheet. Host apps that published a customized
+  `editor.blade.php` with `data-vb-blocks` on the same element
+  keep rendering with the new structure inside it. Views that are
+  not customized need no change.
+
+### Tests
+
+- 5 new unit tests (category defaults + 10 shipped widget
+  classifications). Total: **133 tests / 396 assertions**.
+
 ## [0.4.3] — 2026-04-17
 
 ### Added

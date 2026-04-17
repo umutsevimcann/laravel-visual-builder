@@ -22,6 +22,11 @@ final class DividerWidget extends AbstractAtomicWidget
         return 'divider';
     }
 
+    public function category(): string
+    {
+        return 'layout';
+    }
+
     public function label(): string
     {
         return 'Divider';

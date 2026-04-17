@@ -98,6 +98,11 @@
         // top toolbar's device-preview buttons: clicking tablet resizes
         // the iframe AND switches the traits panel to tablet values.
         activeBreakpoint: 'desktop', // 'desktop' | 'tablet' | 'mobile'
+        // Currently-selected category tab in the v0.5 block palette.
+        // Persists across re-renders so a structural op does not reset
+        // the user to the first tab. null → first-available category
+        // auto-picked on first render.
+        activePaletteCategory: null,
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -164,31 +169,132 @@
     // Block palette (left)
     // ─────────────────────────────────────────────────────────────
 
+    /** Human-readable labels for the canonical category keys. Unknown
+     *  categories fall back to their raw key (capitalized). */
+    const VB_CATEGORY_LABELS = {
+        basic: 'Basic',
+        media: 'Media',
+        layout: 'Layout',
+        general: 'General',
+    };
+
+    /** Preferred ordering of the canonical category tabs. Categories not
+     *  in the list come last, in insertion order. */
+    const VB_CATEGORY_ORDER = ['basic', 'media', 'layout', 'general'];
+
+    /**
+     * Group section types by category key, preserving the registry's
+     * insertion order inside each group. Pure function — drives the
+     * palette render without touching DOM.
+     *
+     * @returns {Array<{key: string, label: string, types: Array<{key: string, type: object}>}>}
+     */
+    function buildPaletteCategories() {
+        const types = state.config.types || {};
+        const groups = {};
+        Object.keys(types).forEach(function (typeKey) {
+            const cat = String(types[typeKey].category || 'general');
+            if (!groups[cat]) groups[cat] = [];
+            groups[cat].push({ key: typeKey, type: types[typeKey] });
+        });
+
+        const keys = Object.keys(groups);
+        keys.sort(function (a, b) {
+            const ai = VB_CATEGORY_ORDER.indexOf(a);
+            const bi = VB_CATEGORY_ORDER.indexOf(b);
+            if (ai === -1 && bi === -1) return a.localeCompare(b);
+            if (ai === -1) return 1;
+            if (bi === -1) return -1;
+            return ai - bi;
+        });
+
+        return keys.map(function (k) {
+            const label = VB_CATEGORY_LABELS[k]
+                || (k.charAt(0).toUpperCase() + k.slice(1).replace(/_/g, ' '));
+            return { key: k, label: label, types: groups[k] };
+        });
+    }
+
+    /**
+     * Render the block palette as Elementor-style category tabs plus a
+     * grid of widget cards underneath. Active tab persists across
+     * re-renders via `state.activePaletteCategory` so a structural
+     * mutation does not reset the user to the first tab.
+     *
+     * Tab markup + card grid live inside the same `[data-vb-blocks]`
+     * container the legacy flat render used — host apps that published
+     * a customized editor.blade.php with `data-vb-blocks` on a
+     * different element still work unchanged.
+     */
     function renderBlockPalette() {
         const container = document.querySelector('[data-vb-blocks]');
         if (!container) return;
 
+        const categories = buildPaletteCategories();
+        if (categories.length === 0) {
+            setHtml(container, '<div class="vb-empty vb-palette-empty">'
+                + '<p class="vb-empty-text">No section types registered.</p></div>');
+            return;
+        }
+
+        if (!state.activePaletteCategory || !categories.some(c => c.key === state.activePaletteCategory)) {
+            state.activePaletteCategory = categories[0].key;
+        }
+
         const existingTypes = new Set((state.config.sections || []).map(s => s.type));
 
-        const html = Object.entries(state.config.types || {}).map(([typeKey, type]) => {
-            const disabled = !type.allows_multiple && existingTypes.has(typeKey);
-            return [
-                '<button type="button" class="vb-block" data-vb-block="', escapeHtml(typeKey), '"',
-                disabled ? ' disabled' : '',
-                ' title="', escapeHtml(type.description || ''), '">',
-                '<span class="vb-block-icon" aria-hidden="true"></span>',
-                '<span class="vb-block-info">',
-                '<span class="vb-block-title">', escapeHtml(type.label), '</span>',
-                '<span class="vb-block-desc">', escapeHtml(type.description || ''), '</span>',
-                '</span>',
-                '</button>',
-            ].join('');
-        }).join('');
+        const tabsHtml = '<div class="vb-palette-tabs" role="tablist">'
+            + categories.map(function (cat) {
+                const active = cat.key === state.activePaletteCategory;
+                return '<button type="button" class="vb-palette-tab'
+                    + (active ? ' vb-palette-tab-active' : '') + '"'
+                    + ' role="tab" aria-selected="' + (active ? 'true' : 'false') + '"'
+                    + ' data-vb-palette-tab="' + escapeHtml(cat.key) + '"'
+                    + ' title="' + escapeHtml(cat.label) + '">'
+                    + '<span class="vb-palette-tab-label">' + escapeHtml(cat.label) + '</span>'
+                    + '<span class="vb-palette-tab-count">' + cat.types.length + '</span>'
+                    + '</button>';
+            }).join('')
+            + '</div>';
 
-        setHtml(container, html);
+        const active = categories.find(c => c.key === state.activePaletteCategory);
+        const gridHtml = '<div class="vb-palette-grid" role="tabpanel">'
+            + active.types.map(function (entry) {
+                const disabled = !entry.type.allows_multiple && existingTypes.has(entry.key);
+                const label = entry.type.label || entry.key;
+                const desc = entry.type.description || '';
+                const iconClass = (entry.type.icon || '').toString();
+                return '<button type="button" class="vb-palette-card'
+                    + (disabled ? ' vb-palette-card-disabled' : '') + '"'
+                    + ' draggable="' + (disabled ? 'false' : 'true') + '"'
+                    + (disabled ? ' disabled' : '')
+                    + ' data-vb-block="' + escapeHtml(entry.key) + '"'
+                    + ' title="' + escapeHtml(desc) + '">'
+                    + '<span class="vb-palette-card-icon" aria-hidden="true">'
+                    + (iconClass ? '<i class="' + escapeHtml(iconClass) + '"></i>' : '')
+                    + '</span>'
+                    + '<span class="vb-palette-card-label">' + escapeHtml(label) + '</span>'
+                    + '</button>';
+            }).join('')
+            + '</div>';
 
-        container.querySelectorAll('[data-vb-block]:not([disabled])').forEach(btn => {
-            btn.addEventListener('click', () => createSection(btn.getAttribute('data-vb-block')));
+        setHtml(container, tabsHtml + gridHtml);
+
+        // Tab click switches active category; re-renders to redraw grid.
+        container.querySelectorAll('[data-vb-palette-tab]').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                const next = tab.getAttribute('data-vb-palette-tab');
+                if (next === state.activePaletteCategory) return;
+                state.activePaletteCategory = next;
+                renderBlockPalette();
+            });
+        });
+
+        // Card click — create a section of that type.
+        container.querySelectorAll('[data-vb-block]:not([disabled])').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                createSection(btn.getAttribute('data-vb-block'));
+            });
         });
     }
 
