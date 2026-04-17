@@ -16,6 +16,7 @@ use Umutsevimcann\VisualBuilder\Contracts\SanitizerInterface;
 use Umutsevimcann\VisualBuilder\Domain\Models\BuilderSection;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ButtonWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ColumnsWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\DividerWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\HeadingWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconBoxWidget;
@@ -75,6 +76,7 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             ->hasMigrations([
                 'create_builder_sections_table',
                 'create_builder_revisions_table',
+                'add_parent_and_column_index_to_builder_sections_table',
             ])
             ->hasInstallCommand(static function (InstallCommand $command): void {
                 $command
@@ -199,6 +201,7 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             'video' => VideoWidget::class,
             'icon' => IconWidget::class,
             'icon_box' => IconBoxWidget::class,
+            'columns' => ColumnsWidget::class,
         ];
 
         /** @var SectionTypeRegistry $registry */

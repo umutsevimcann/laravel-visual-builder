@@ -40,6 +40,12 @@ final class EloquentBuilderRepository implements BuilderRepositoryInterface
         return BuilderSection::query()
             ->where('builder_type', $target->getMorphClass())
             ->where('builder_id', $target->getKey())
+            // Top-level only — nested container children (e.g. Columns
+            // widget slots) are loaded lazily through the parent's
+            // children() relation at render time, not here. The admin
+            // section list and every frontend render should see only
+            // the root sequence.
+            ->whereNull('parent_id')
             ->orderBy('sort_order')
             ->get();
     }
@@ -55,6 +61,7 @@ final class EloquentBuilderRepository implements BuilderRepositoryInterface
         return BuilderSection::query()
             ->where('builder_type', $target->getMorphClass())
             ->where('builder_id', $target->getKey())
+            ->whereNull('parent_id')
             ->where('is_published', true)
             ->where(static function ($q) use ($now): void {
                 $q->whereNull('starts_at')->orWhere('starts_at', '<=', $now);

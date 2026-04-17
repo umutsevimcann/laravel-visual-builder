@@ -190,6 +190,7 @@ return [
             'video',
             'icon',
             'icon_box',
+            'columns',
         ],
     ],
 

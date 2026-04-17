@@ -31,6 +31,61 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.4.2] — 2026-04-17
+
+### Added
+
+- **Nested containers and the Columns widget.** The tenth atomic
+  widget lands: a horizontal grid of 1–6 slots, configurable `gap`,
+  `stack_on` breakpoint (mobile / tablet / never). Children are real
+  `BuilderSection` rows — not embedded JSON — so every inner widget
+  keeps its own editable fields, styles, visibility flags and
+  breakpoint overrides. A user can drop a Heading + Paragraph into
+  column 0 and an Image into column 1 and edit each one exactly the
+  way they edit top-level sections.
+
+- **`parent_id` + `column_index` schema.** A new published migration
+  `add_parent_and_column_index_to_builder_sections_table` adds the
+  two columns (both nullable, so legacy rows keep rendering at the
+  top level) plus a composite index on
+  `(parent_id, column_index, sort_order)` for the per-column render
+  query.
+
+- **`BuilderSection` relations.**
+  - `parent()` belongsTo — the containing section.
+  - `children()` hasMany — direct descendants (no default ordering;
+    relation definitions stay pure so Larastan keeps the return type
+    as `HasMany`).
+  - `orderedChildren()` — `Collection` of children ordered by
+    `column_index` then `sort_order`; the canonical read used by
+    container render partials.
+  - `childrenInColumn(int)` — `Collection` filtered to one column
+    slot, still sort_order-ordered.
+
+- **Repository top-level filter.** `forTarget()` and
+  `visibleForTarget()` now filter `WHERE parent_id IS NULL` so the
+  admin section list, the block palette singleton checks, and the
+  frontend render all see only top-level sections. Container
+  children surface lazily through their parent at render time.
+
+### Tests
+
+- 4 new unit tests on `ColumnsWidget` (key / viewPartial / field
+  identities / defaults).
+- 5 new feature tests on the hierarchy contract: repository
+  top-level filter (both methods), `orderedChildren()` ordering,
+  `childrenInColumn()` filter, `parent()` lookup.
+- Total suite: **128 tests / 365 assertions**.
+
+### Known limitations — admin insertion UI
+
+- The block palette's `+` inserter still adds top-level sections
+  only. Adding a widget INTO a column (setting its `parent_id` /
+  `column_index` via the UI) is a separate admin-UX slice and lands
+  in a follow-up release. For now, nested children can be seeded
+  programmatically (factories, artisan tinker) and render correctly
+  end-to-end through the Columns blade partial.
+
 ## [0.4.1] — 2026-04-17
 
 ### Added

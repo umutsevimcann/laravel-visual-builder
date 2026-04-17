@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeInterface;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ButtonWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ColumnsWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\HeadingWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconBoxWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconWidget;
@@ -42,6 +43,7 @@ function rebootWidgetRegistration(): void
             'video' => VideoWidget::class,
             'icon' => IconWidget::class,
             'icon_box' => IconBoxWidget::class,
+            'columns' => ColumnsWidget::class,
         ];
         foreach ((array) config('visual-builder.widgets.list', []) as $key) {
             if (isset($available[$key]) && ! $registry->has($key)) {

@@ -1,0 +1,63 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Adds the two columns that power nested containers (Columns widget and
+ * any future stack/grid/accordion containers).
+ *
+ *   parent_id     — NULLABLE bigint. When set, references another row in
+ *                   the same table. Top-level sections remain parent_id
+ *                   NULL so the existing WHERE parent_id IS NULL query
+ *                   the repository now uses to build the top-level list
+ *                   keeps ignoring children automatically.
+ *
+ *   column_index  — NULLABLE unsigned int. When the parent is a Columns
+ *                   widget, this slot indicates which column (0..N-1)
+ *                   the child belongs to. Irrelevant (and left NULL) for
+ *                   children of containers that have only one slot.
+ *
+ * No foreign-key constraint on parent_id — the DB driver would cascade
+ * deletes in ways that conflict with the soft-delete flow for owner
+ * models and with the sort_order renumbering performed by
+ * ReorderSections. The Application layer enforces referential
+ * integrity explicitly via DeleteSection, which clears children before
+ * dropping the parent.
+ *
+ * Backwards compatible: existing rows get parent_id=NULL / column_index=NULL
+ * on migration, so pre-0.4.2 data keeps rendering identically.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $tableName = (string) config('visual-builder.tables.sections', 'builder_sections');
+
+        Schema::table($tableName, static function (Blueprint $table): void {
+            $table->unsignedBigInteger('parent_id')->nullable()->after('instance_key');
+            $table->unsignedInteger('column_index')->nullable()->after('parent_id');
+
+            // Composite index — most common child query on render:
+            //   WHERE parent_id = ? AND column_index = ?
+            //   ORDER BY sort_order
+            $table->index(
+                ['parent_id', 'column_index', 'sort_order'],
+                $table->getTable().'_children_lookup_idx',
+            );
+        });
+    }
+
+    public function down(): void
+    {
+        $tableName = (string) config('visual-builder.tables.sections', 'builder_sections');
+
+        Schema::table($tableName, static function (Blueprint $table): void {
+            $table->dropIndex($table->getTable().'_children_lookup_idx');
+            $table->dropColumn(['parent_id', 'column_index']);
+        });
+    }
+};

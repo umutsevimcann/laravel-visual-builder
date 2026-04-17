@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Umutsevimcann\VisualBuilder\Domain\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeInterface;
@@ -36,6 +39,8 @@ use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
  * @property string $builder_type
  * @property string $type
  * @property string $instance_key
+ * @property int|null $parent_id
+ * @property int|null $column_index
  * @property bool $is_published
  * @property int $sort_order
  * @property array|null $content
@@ -57,6 +62,8 @@ class BuilderSection extends Model
         'builder_type',
         'type',
         'instance_key',
+        'parent_id',
+        'column_index',
         'is_published',
         'sort_order',
         'content',
@@ -78,6 +85,8 @@ class BuilderSection extends Model
         return [
             'is_published' => 'boolean',
             'sort_order' => 'integer',
+            'parent_id' => 'integer',
+            'column_index' => 'integer',
             'content' => 'array',
             'style' => 'array',
             'starts_at' => 'datetime',
@@ -91,6 +100,70 @@ class BuilderSection extends Model
     public function builder(): MorphTo
     {
         return $this->morphTo();
+    }
+
+    /**
+     * Nested-container parent. NULL for top-level sections.
+     *
+     * A section whose type is a container (Columns widget, future
+     * Accordion / Tabs containers) references its own rows via the
+     * parent_id column. Children are rendered recursively from the
+     * container's view partial.
+     */
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'parent_id');
+    }
+
+    /**
+     * All direct children of a container section.
+     *
+     * No default ordering is applied here — chaining ->orderBy() in a
+     * relation definition makes Larastan/PHPStan resolve the return
+     * type back to Builder, and relation definitions should stay pure
+     * anyway. Callers order with `->orderedChildren()` when they want
+     * the canonical column + sort order, or apply their own ordering.
+     *
+     * Relation stays empty on non-container sections.
+     */
+    public function children(): HasMany
+    {
+        return $this->hasMany(self::class, 'parent_id');
+    }
+
+    /**
+     * Canonical ordering used by every Columns-widget render: column_index
+     * first (so column-0 children come before column-1), then sort_order
+     * inside each column.
+     *
+     * Returns an Eloquent collection so Blade partials can iterate in a
+     * predictable order without a trailing ->orderBy()->get() chain.
+     *
+     * @return Collection<int, self>
+     */
+    public function orderedChildren(): Collection
+    {
+        /** @var Collection<int, self> */
+        return $this->children()
+            ->orderBy('column_index')
+            ->orderBy('sort_order')
+            ->get();
+    }
+
+    /**
+     * Children confined to a single column slot — sort_order-ordered.
+     * The Columns widget partial uses this to emit each column's
+     * contents in turn without filtering in Blade.
+     *
+     * @return Collection<int, self>
+     */
+    public function childrenInColumn(int $columnIndex): Collection
+    {
+        /** @var Collection<int, self> */
+        return $this->children()
+            ->where('column_index', $columnIndex)
+            ->orderBy('sort_order')
+            ->get();
     }
 
     /**
