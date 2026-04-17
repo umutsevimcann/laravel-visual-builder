@@ -293,8 +293,8 @@
     document.body.classList.add('vb-builder-active');
 
     // Breakpoint thresholds shared with the server-side
-    // BreakpointStyleResolver so live-preview @media queries match the
-    // rules @vbSectionStyles emits on the production render. The
+    // BreakpointStyleResolver so live-preview @@media queries match the
+    // rules @@vbSectionStyles emits on the production render. The
     // thresholds come from config/visual-builder.php via the
     // resolver's thresholds() bootstrap on iframe render.
     const vbBreakpoints = @json(app(\Umutsevimcann\VisualBuilder\Domain\Services\BreakpointStyleResolver::class)->thresholds());
@@ -635,7 +635,7 @@
     /**
      * Update the section's scoped <style> block in place. If the block
      * does not exist yet (e.g. the section was rendered from cached HTML
-     * that predates the @vbSectionStyles directive), create one just
+     * that predates the @@vbSectionStyles directive), create one just
      * before the wrap so cascade order is stable.
      *
      * Uses CSS media queries rather than inline styles resolved against

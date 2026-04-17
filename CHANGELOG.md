@@ -31,6 +31,19 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.3.1] — 2026-04-17
+
+### Fixed
+
+- **Iframe inject script no longer breaks host app render in builder
+  mode.** Two JS comments inside `inject.blade.php` referenced
+  `@vbSectionStyles` verbatim, which Blade eagerly compiled as a
+  directive call with zero arguments — causing
+  `Too few arguments to sectionStylesTag()` on every builder-mode
+  page hit. Escaped to `@@vbSectionStyles` so the text reaches the
+  browser as a literal comment and the directive is only invoked when
+  the host app actually writes it in a template.
+
 ## [0.3.0] — 2026-04-17
 
 ### Added
