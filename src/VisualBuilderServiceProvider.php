@@ -18,8 +18,12 @@ use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ButtonWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\DividerWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\HeadingWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconBoxWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ImageWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ParagraphWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\SpacerWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\VideoWidget;
 use Umutsevimcann\VisualBuilder\Domain\Services\BreakpointStyleResolver;
 use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
 use Umutsevimcann\VisualBuilder\Infrastructure\Media\StorageMediaService;
@@ -191,6 +195,10 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             'button' => ButtonWidget::class,
             'spacer' => SpacerWidget::class,
             'divider' => DividerWidget::class,
+            'image' => ImageWidget::class,
+            'video' => VideoWidget::class,
+            'icon' => IconWidget::class,
+            'icon_box' => IconBoxWidget::class,
         ];
 
         /** @var SectionTypeRegistry $registry */

@@ -6,6 +6,10 @@ use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeInterface;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ButtonWidget;
 use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\HeadingWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconBoxWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\IconWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ImageWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\VideoWidget;
 
 /*
  * Feature-level proof that the atomic widget registration sequence is
@@ -34,6 +38,10 @@ function rebootWidgetRegistration(): void
         $available = [
             'heading' => HeadingWidget::class,
             'button' => ButtonWidget::class,
+            'image' => ImageWidget::class,
+            'video' => VideoWidget::class,
+            'icon' => IconWidget::class,
+            'icon_box' => IconBoxWidget::class,
         ];
         foreach ((array) config('visual-builder.widgets.list', []) as $key) {
             if (isset($available[$key]) && ! $registry->has($key)) {

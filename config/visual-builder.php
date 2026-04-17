@@ -186,6 +186,10 @@ return [
             'button',
             'spacer',
             'divider',
+            'image',
+            'video',
+            'icon',
+            'icon_box',
         ],
     ],
 

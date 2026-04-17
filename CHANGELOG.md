@@ -31,6 +31,45 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.4.1] — 2026-04-17
+
+### Added
+
+- **Four media widgets.** **Image**, **Video**, **Icon**, **IconBox**
+  join the atomic-widget lineup — all opt-in through the same
+  `visual-builder.widgets` config block shipped in v0.4.0.
+  - **Image** — storage-path / asset / absolute URL `src`, translatable
+    alt text, optional link URL, `object-fit` select (cover / contain /
+    fill / none). Render resolves the `src` through the existing URL
+    conventions (`assets/` prefix, `/storage/` fallback, absolute
+    passthrough) so it drops into any host stack without a media
+    service rewrite.
+  - **Video** — accepts a raw `.mp4` URL (native `<video>` tag) or a
+    YouTube / Vimeo page URL (normalized to the embed-player iframe).
+    Autoplay, loop and controls toggles map to the provider's
+    query-string flags; aspect-ratio selector covers 16/9 · 4/3 · 1/1
+    · 21/9. Unrecognized URLs render a placeholder block rather than
+    emitting an arbitrary iframe `src`.
+  - **Icon** — library-agnostic: `class` field takes any CSS class
+    string (Font Awesome, Bootstrap Icons, Lucide, etc.). Size
+    selector maps to 5 CSS `font-size` presets (16→64px). Optional
+    link wraps the icon in an `<a>`.
+  - **IconBox** — composed "features" block: icon + translatable
+    title + rich-text body. `layout` select controls icon placement
+    (top / left / right, mapped to flex-direction). Title and body
+    both carry `data-vb-editable` so inline editing works in the
+    iframe without extra wiring.
+
+- **Tests.** 10 new unit tests on the media widget schemas plus
+  registration coverage for the expanded `available` map. Total
+  suite: **119 tests / 328 assertions**.
+
+### Housekeeping
+
+- `visual-builder.widgets.list` default now includes the 4 new keys
+  (`image`, `video`, `icon`, `icon_box`). Host apps that already
+  trimmed the list in their published config keep their choices.
+
 ## [0.4.0] — 2026-04-17
 
 ### Added
