@@ -159,4 +159,25 @@ return [
     */
     'view_namespace' => 'visual-builder',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Responsive breakpoints
+    |--------------------------------------------------------------------------
+    |
+    | Maximum viewport widths for the tablet and mobile breakpoints, in
+    | pixels. These values drive the `@media (max-width: Npx)` queries
+    | emitted by the @vbSectionStyles directive AND the iframe preview's
+    | live breakpoint detection (window.innerWidth).
+    |
+    | Defaults match Bootstrap 5 boundaries so a host app running Bootstrap
+    | or Tailwind doesn't need to override anything. tablet_max MUST be
+    | strictly greater than mobile_max — BreakpointStyleResolver throws
+    | at construction otherwise.
+    |
+    */
+    'breakpoints' => [
+        'tablet_max' => 1023, // applies at <= 1023px
+        'mobile_max' => 767,  // applies at <=  767px
+    ],
+
 ];

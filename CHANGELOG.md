@@ -31,6 +31,56 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.3.0] — 2026-04-17
+
+### Added
+
+- **Per-breakpoint style values (Elementor-style responsive editing).**
+  Style keys may now store either a scalar (applies everywhere, legacy
+  shape) or a per-breakpoint object:
+  ```json
+  { "padding_y": { "desktop": "80px", "tablet": "60px", "mobile": "40px" } }
+  ```
+  The top toolbar's device buttons (monitor / tablet / mobile) now
+  switch the editor's active breakpoint. Responsive fields (padding,
+  margin, alignment) write only the active breakpoint's slice and show
+  a small badge indicating which device they affect. Inheritance is
+  `mobile ← tablet ← desktop` so partially-filled object values still
+  produce sensible output at every size.
+- **`BreakpointStyleResolver` service** — resolves a mixed style array
+  for a specific breakpoint and emits browser-ready CSS with `@media`
+  queries, `!important`-scoped so builder settings win over legacy
+  inline `style=` attributes in host section partials. Container-bound
+  as a singleton; construction is config-driven.
+- **`@vbSectionStyles($section)` Blade directive** — emits a scoped
+  `<style>` block containing the resolved CSS for one section, ready
+  to drop in above the section's markup in production templates. Host
+  apps add one line per section partial and the full responsive
+  cascade is rendered server-side with no template rewrites required.
+- **`config/visual-builder.php` → `breakpoints` block** — configurable
+  `tablet_max` (default 1023) and `mobile_max` (default 767) viewport
+  thresholds. Thresholds flow to both the server resolver and the
+  iframe inject script via bootstrap, guaranteeing the live preview
+  matches production cascade behaviour.
+
+### Changed
+
+- **Iframe inject script switches to scoped `<style>` blocks for live
+  preview style updates.** `updateSectionStyleInDom` no longer mutates
+  inline `element.style` — it writes the CSS text of a
+  `style[data-vb-section-styles="{id}"]` tag (creating it if absent),
+  matching the production render shape 1:1. Browser media queries take
+  over when the iframe is resized by the top toolbar's device buttons,
+  so the live preview reacts without any JS resize listener.
+
+### Backwards compatibility
+
+- Existing flat scalar style values keep working verbatim. Users adopt
+  the responsive shape by simply swapping a scalar for an object — no
+  data migration required, no forced rewrite of section partials. Host
+  apps that do not call `@vbSectionStyles` still render as before; the
+  directive is additive.
+
 ## [0.2.7] — 2026-04-17
 
 ### Added

@@ -93,7 +93,50 @@
             clusterTimer: null,
             clusterMs: 400,
         },
+        // Currently-edited breakpoint — drives which slice of object-shape
+        // style values the traits panel reads and writes. Synced with the
+        // top toolbar's device-preview buttons: clicking tablet resizes
+        // the iframe AND switches the traits panel to tablet values.
+        activeBreakpoint: 'desktop', // 'desktop' | 'tablet' | 'mobile'
     };
+
+    // ─────────────────────────────────────────────────────────────
+    // Responsive breakpoint helpers (mirror BreakpointStyleResolver)
+    // ─────────────────────────────────────────────────────────────
+
+    /** Keys whose values may be breakpoint objects; drives UI affordances. */
+    const VB_RESPONSIVE_KEYS = [
+        'padding_y', 'padding_x',
+        'padding_top', 'padding_right', 'padding_bottom', 'padding_left',
+        'margin_top', 'margin_right', 'margin_bottom', 'margin_left',
+        'alignment',
+    ];
+
+    /** Inheritance chain — first filled breakpoint in the chain wins. */
+    const VB_BP_INHERIT = {
+        desktop: ['desktop', 'tablet', 'mobile'],
+        tablet: ['tablet', 'desktop', 'mobile'],
+        mobile: ['mobile', 'tablet', 'desktop'],
+    };
+
+    /**
+     * Resolve a stored style value for the given breakpoint. Scalars
+     * return unchanged; object values walk the inheritance chain. Used
+     * by the traits panel when rendering inputs so each device preview
+     * shows its effective value.
+     */
+    function vbResolveStyleValue(value, breakpoint) {
+        if (value == null) return null;
+        if (typeof value !== 'object' || Array.isArray(value)) {
+            return value === '' ? null : value;
+        }
+        const chain = VB_BP_INHERIT[breakpoint] || VB_BP_INHERIT.desktop;
+        for (let i = 0; i < chain.length; i++) {
+            const leaf = value[chain[i]];
+            if (leaf != null && leaf !== '') return leaf;
+        }
+        return null;
+    }
 
     // ─────────────────────────────────────────────────────────────
     // Bootstrap
@@ -662,16 +705,31 @@
 
     function renderStyleTab(section) {
         const style = section.style || {};
+        const bp = state.activeBreakpoint;
+        // Resolver shim so selectRow/colorPickerRow can be called with
+        // EITHER a scalar stored value (legacy) or an object-shape
+        // responsive value. The displayed widget always reflects the
+        // currently-active breakpoint's effective value via inheritance.
+        const v = function (key) { return vbResolveStyleValue(style[key], bp); };
+
         const parts = [
+            // Active-breakpoint indicator — makes it clear which device
+            // preview the user is editing when viewing tablet/mobile.
+            // Clicking the device icons in the top toolbar updates this.
+            '<div class="vb-field-help" style="margin-bottom:8px;padding:6px 10px;background:#eff6ff;border-left:3px solid #2563eb;border-radius:3px;font-size:11px;color:#1e40af">',
+            'Editing for: <strong>', escapeHtml(bp.charAt(0).toUpperCase() + bp.slice(1)), '</strong>',
+            bp !== 'desktop' ? ' <span style="color:#6b7280">(inherits from desktop unless overridden)</span>' : '',
+            '</div>',
+
             '<div class="vb-group">',
             '<div class="vb-group-title">Background</div>',
-            colorPickerRow('Background color', 'bg_color', style.bg_color),
-            colorPickerRow('Text color', 'text_color', style.text_color),
+            colorPickerRow('Background color', 'bg_color', v('bg_color')),
+            colorPickerRow('Text color', 'text_color', v('text_color')),
             '</div>',
 
             '<div class="vb-group">',
             '<div class="vb-group-title">Spacing</div>',
-            selectRow('Vertical padding', 'padding_y', style.padding_y, {
+            selectRow('Vertical padding', 'padding_y', v('padding_y'), {
                 '': 'Default',
                 '40px': 'Compact (40px)',
                 '80px': 'Normal (80px)',
@@ -706,11 +764,27 @@
         return parts.join('');
     }
 
+    /**
+     * Responsive badge used next to a field label when the style key is
+     * breakpoint-aware. Signals to the user that this field stores a
+     * per-device value and the currently-active breakpoint controls
+     * what they see / edit.
+     */
+    function responsiveBadge(key) {
+        if (VB_RESPONSIVE_KEYS.indexOf(key) === -1) return '';
+        const bp = state.activeBreakpoint;
+        const icon = bp === 'mobile' ? '📱' : bp === 'tablet' ? '📲' : '🖥️';
+        return ' <span class="vb-responsive-badge" title="Responsive — per-breakpoint value"'
+            + ' style="display:inline-flex;align-items:center;gap:2px;font-size:10px;color:#2563eb;'
+            + 'background:#eff6ff;padding:1px 6px;border-radius:10px;margin-left:4px">'
+            + icon + ' ' + escapeHtml(bp) + '</span>';
+    }
+
     function colorPickerRow(label, key, value) {
         const v = value || '#ffffff';
         return [
             '<div class="vb-field">',
-            '<label class="vb-field-label"><span>', escapeHtml(label), '</span></label>',
+            '<label class="vb-field-label"><span>', escapeHtml(label), responsiveBadge(key), '</span></label>',
             '<div style="display:flex;gap:6px;align-items:center">',
             '<input type="color" data-vb-style="', escapeHtml(key), '" value="', escapeHtml(v), '" style="width:44px;height:32px;padding:2px;border:1px solid #d1d5db;border-radius:4px">',
             '<input type="text" class="vb-field-input" data-vb-style-text="', escapeHtml(key), '" value="', escapeHtml(value || ''), '" placeholder="inherit" style="flex:1;font-family:monospace">',
@@ -725,7 +799,7 @@
         ).join('');
         return [
             '<div class="vb-field">',
-            '<label class="vb-field-label"><span>', escapeHtml(label), '</span></label>',
+            '<label class="vb-field-label"><span>', escapeHtml(label), responsiveBadge(key), '</span></label>',
             '<select class="vb-field-select" data-vb-style="', escapeHtml(key), '">', opts, '</select>',
             '</div>',
         ].join('');
@@ -909,10 +983,43 @@
             const textInput = document.querySelector('input[type="text"][data-vb-style-text="' + CSS.escape(key) + '"]');
             if (textInput) textInput.value = value;
         }
+
+        const isResponsive = VB_RESPONSIVE_KEYS.indexOf(key) !== -1;
+        const bp = state.activeBreakpoint;
+
         applyPendingChange(section.id, s => {
             ensurePath(s, ['style']);
-            s.style[key] = value;
+
+            if (!isResponsive) {
+                s.style[key] = value;
+                return;
+            }
+
+            // Responsive key — ensure the slot is an object, then write
+            // only the active-breakpoint slice. Empty values clear just
+            // that slice; when the object ends up empty we drop it so
+            // backwards-compat readers never see `{}`.
+            const existing = s.style[key];
+            const isObj = existing !== null && typeof existing === 'object' && !Array.isArray(existing);
+            if (!isObj) {
+                // First per-breakpoint write for this key: promote the
+                // current scalar (if any) to the desktop slice so
+                // switching to tablet/mobile first and back to desktop
+                // does not wipe the legacy scalar value.
+                s.style[key] = (existing === null || existing === undefined || existing === '')
+                    ? {}
+                    : { desktop: existing };
+            }
+            if (value === null || value === undefined || value === '') {
+                delete s.style[key][bp];
+                if (Object.keys(s.style[key]).length === 0) {
+                    delete s.style[key];
+                }
+            } else {
+                s.style[key][bp] = value;
+            }
         });
+
         postToIframe({ type: 'style-update', sectionId: section.id, style: findSection(section.id).style || {} });
     }
 
@@ -1557,6 +1664,21 @@
         if (mode === 'tablet' || mode === 'mobile') viewport.classList.add('vb-device-' + mode);
         document.querySelectorAll('[data-vb-device]').forEach(b => b.classList.remove('vb-device-active'));
         btn.classList.add('vb-device-active');
+
+        // Map the preview device to an edit breakpoint: the monitor
+        // button (no explicit mode → 'desktop') edits desktop values,
+        // tablet / mobile edit their namesakes. This keeps the editor's
+        // write target aligned with the device the user is previewing.
+        const nextBp = (mode === 'tablet' || mode === 'mobile') ? mode : 'desktop';
+        if (nextBp !== state.activeBreakpoint) {
+            state.activeBreakpoint = nextBp;
+            // Re-render traits so responsive field values and badges
+            // reflect the newly active breakpoint. No-op when nothing
+            // is selected yet.
+            if (state.selectedSectionId !== null && findSection(state.selectedSectionId)) {
+                renderTraits(state.selectedSectionId);
+            }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

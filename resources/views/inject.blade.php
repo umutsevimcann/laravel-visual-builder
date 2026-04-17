@@ -292,6 +292,13 @@
     const allowedOrigin = window.location.origin;
     document.body.classList.add('vb-builder-active');
 
+    // Breakpoint thresholds shared with the server-side
+    // BreakpointStyleResolver so live-preview @media queries match the
+    // rules @vbSectionStyles emits on the production render. The
+    // thresholds come from config/visual-builder.php via the
+    // resolver's thresholds() bootstrap on iframe render.
+    const vbBreakpoints = @json(app(\Umutsevimcann\VisualBuilder\Domain\Services\BreakpointStyleResolver::class)->thresholds());
+
     /**
      * Forward section wrapper + editable element clicks to the parent window.
      * A single capturing listener handles both cases — finer-grained targets
@@ -511,34 +518,145 @@
         if (img) img.setAttribute('src', url || '');
     }
 
+    // Mirrors BreakpointStyleResolver::INHERITANCE on the server side.
+    // Order of lookup when a breakpoint slot is empty on an object value.
+    const VB_BP_INHERIT = {
+        desktop: ['desktop', 'tablet', 'mobile'],
+        tablet: ['tablet', 'desktop', 'mobile'],
+        mobile: ['mobile', 'tablet', 'desktop'],
+    };
+
+    // Mirrors BreakpointStyleResolver::COMPOUND_KEYS — internal style
+    // keys that expand to multiple CSS properties.
+    const VB_COMPOUND = {
+        padding_y: ['padding-top', 'padding-bottom'],
+        padding_x: ['padding-left', 'padding-right'],
+        margin_y: ['margin-top', 'margin-bottom'],
+        margin_x: ['margin-left', 'margin-right'],
+    };
+
+    /** snake_case style keys whose CSS name differs from str_replace(_, -, key). */
+    const VB_KEY_ALIASES = {
+        alignment: 'text-align',
+        bg_color: 'background-color',
+        text_color: 'color',
+    };
+
+    /**
+     * Resolve one style value for a specific breakpoint. Scalars return
+     * as-is; object values walk VB_BP_INHERIT until a non-empty leaf is
+     * found, matching the server-side resolver's output exactly.
+     */
+    function vbResolveValue(value, breakpoint) {
+        if (value == null) return null;
+        if (typeof value !== 'object' || Array.isArray(value)) {
+            return value === '' ? null : String(value);
+        }
+        const chain = VB_BP_INHERIT[breakpoint] || VB_BP_INHERIT.desktop;
+        for (let i = 0; i < chain.length; i++) {
+            const leaf = value[chain[i]];
+            if (leaf != null && leaf !== '') return String(leaf);
+        }
+        return null;
+    }
+
+    /** Return the flat key → string map for one breakpoint. */
+    function vbResolveAll(style, breakpoint) {
+        const out = {};
+        if (!style || typeof style !== 'object') return out;
+        for (const k of Object.keys(style)) {
+            const v = vbResolveValue(style[k], breakpoint);
+            if (v != null && v !== '') out[k] = v;
+        }
+        return out;
+    }
+
+    /** List of CSS property names one internal style key expands to. */
+    function vbCssPropsFor(key) {
+        if (VB_COMPOUND[key]) return VB_COMPOUND[key];
+        return [VB_KEY_ALIASES[key] || key.replace(/_/g, '-')];
+    }
+
+    /** `prop: value !important; ...` from a flat resolved map. */
+    function vbDeclsFor(resolved) {
+        const parts = [];
+        for (const k of Object.keys(resolved)) {
+            for (const prop of vbCssPropsFor(k)) {
+                parts.push(prop + ': ' + resolved[k] + ' !important');
+            }
+        }
+        return parts.join('; ');
+    }
+
+    /** Entries of `over` that differ from `base` — drives @media blocks. */
+    function vbDiff(base, over) {
+        const out = {};
+        for (const k of Object.keys(over)) {
+            const prev = Object.prototype.hasOwnProperty.call(base, k) ? base[k] : null;
+            if (prev !== over[k]) out[k] = over[k];
+        }
+        return out;
+    }
+
+    /**
+     * Build the CSS text for one section — desktop rule + optional
+     * @media blocks for tablet/mobile overrides. Mirrors the output of
+     * BreakpointStyleResolver::toCss so live preview and production
+     * stay cascade-equivalent when the user is editing.
+     */
+    function vbBuildSectionCss(sectionId, style) {
+        const selector = '[data-vb-section-id="' + String(sectionId) + '"]';
+        const desktop = vbResolveAll(style, 'desktop');
+        const tablet = vbResolveAll(style, 'tablet');
+        const mobile = vbResolveAll(style, 'mobile');
+
+        const blocks = [];
+        const dDecls = vbDeclsFor(desktop);
+        if (dDecls) blocks.push(selector + ' { ' + dDecls + ' }');
+
+        const tDiff = vbDiff(desktop, tablet);
+        if (Object.keys(tDiff).length) {
+            blocks.push(
+                '@media (max-width: ' + vbBreakpoints.tablet_max + 'px) { ' +
+                selector + ' { ' + vbDeclsFor(tDiff) + ' } }'
+            );
+        }
+        const mBase = Object.keys(tablet).length ? tablet : desktop;
+        const mDiff = vbDiff(mBase, mobile);
+        if (Object.keys(mDiff).length) {
+            blocks.push(
+                '@media (max-width: ' + vbBreakpoints.mobile_max + 'px) { ' +
+                selector + ' { ' + vbDeclsFor(mDiff) + ' } }'
+            );
+        }
+        return blocks.join(' ');
+    }
+
+    /**
+     * Update the section's scoped <style> block in place. If the block
+     * does not exist yet (e.g. the section was rendered from cached HTML
+     * that predates the @vbSectionStyles directive), create one just
+     * before the wrap so cascade order is stable.
+     *
+     * Uses CSS media queries rather than inline styles resolved against
+     * window.innerWidth so the browser handles breakpoint switching when
+     * the editor resizes the iframe — no JS resize listener needed, and
+     * production render emits the same shape.
+     */
     function updateSectionStyleInDom(sectionId, style) {
         const wrap = document.querySelector(
             '.vb-section-wrap[data-vb-section-id="' + CSS.escape(String(sectionId)) + '"]'
         );
         if (!wrap) return;
 
-        const root = wrap.querySelector('section') || wrap;
-        const apply = function (prop, value) {
-            if (value == null || value === '') root.style.removeProperty(prop);
-            else root.style.setProperty(prop, value, 'important');
-        };
-
-        apply('background-color', style && style.bg_color);
-        apply('color', style && style.text_color);
-        apply('text-align', style && style.alignment);
-
-        if (style && style.padding_y) {
-            apply('padding-top', style.padding_y);
-            apply('padding-bottom', style.padding_y);
-        } else {
-            apply('padding-top', null);
-            apply('padding-bottom', null);
+        const tagSelector = 'style[data-vb-section-styles="' + CSS.escape(String(sectionId)) + '"]';
+        let tag = document.querySelector(tagSelector);
+        if (!tag) {
+            tag = document.createElement('style');
+            tag.setAttribute('data-vb-section-styles', String(sectionId));
+            wrap.parentNode.insertBefore(tag, wrap);
         }
-
-        ['top', 'right', 'bottom', 'left'].forEach(function (side) {
-            apply('padding-' + side, style && style['padding_' + side]);
-            apply('margin-' + side, style && style['margin_' + side]);
-        });
+        tag.textContent = vbBuildSectionCss(sectionId, style || {});
     }
 
     function updateElementStyleInDom(sectionId, fieldKey, styles) {

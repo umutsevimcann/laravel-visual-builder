@@ -13,7 +13,9 @@ use Umutsevimcann\VisualBuilder\Contracts\AuthorizationInterface;
 use Umutsevimcann\VisualBuilder\Contracts\BuilderRepositoryInterface;
 use Umutsevimcann\VisualBuilder\Contracts\MediaServiceInterface;
 use Umutsevimcann\VisualBuilder\Contracts\SanitizerInterface;
+use Umutsevimcann\VisualBuilder\Domain\Models\BuilderSection;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
+use Umutsevimcann\VisualBuilder\Domain\Services\BreakpointStyleResolver;
 use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
 use Umutsevimcann\VisualBuilder\Infrastructure\Media\StorageMediaService;
 use Umutsevimcann\VisualBuilder\Infrastructure\Repositories\EloquentBuilderRepository;
@@ -87,6 +89,20 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
         // Singletons (shared state across the request)
         $this->app->singleton(SectionTypeRegistry::class);
 
+        // Breakpoint thresholds come from config/visual-builder.php and
+        // are singleton so every consumer (Blade directive, editor
+        // bootstrap, iframe inject) sees the same numbers. Resolver
+        // throws on construction if tablet_max <= mobile_max — callers
+        // never observe an invalid config.
+        $this->app->singleton(BreakpointStyleResolver::class, static function ($app): BreakpointStyleResolver {
+            $config = (array) $app['config']->get('visual-builder.breakpoints', []);
+
+            return new BreakpointStyleResolver(
+                tabletMaxPx: (int) ($config['tablet_max'] ?? 1023),
+                mobileMaxPx: (int) ($config['mobile_max'] ?? 767),
+            );
+        });
+
         // Contract → default implementation bindings
         $this->app->bind(BuilderRepositoryInterface::class, EloquentBuilderRepository::class);
         $this->app->bind(MediaServiceInterface::class, StorageMediaService::class);
@@ -105,6 +121,19 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             'Umutsevimcann\\VisualBuilder\\View\\Components',
             'visual-builder',
         );
+
+        // @vbSectionStyles($section) — emits a <style> block with the
+        // section's resolved CSS including @media queries for responsive
+        // overrides. Host section partials call this once near the top
+        // so the cascade applies before any inline styles in the markup.
+        //
+        // Accepts either a BuilderSection model (reads ->id + ->style)
+        // or a raw array with 'id' and 'style' keys — that second shape
+        // keeps the directive usable from array-serialized sections (e.g.
+        // in iframe bootstrap payloads) without forcing a model hydrate.
+        Blade::directive('vbSectionStyles', static function (string $expression): string {
+            return "<?php echo \\Umutsevimcann\\VisualBuilder\\VisualBuilder::sectionStylesTag({$expression}); ?>";
+        });
 
         if (config('visual-builder.routes.enabled', true) === false) {
             return;
