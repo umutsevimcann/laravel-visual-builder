@@ -31,6 +31,53 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.4.3] — 2026-04-17
+
+### Added
+
+- **Inline rich-text editing for `data-vb-html` fields — floating
+  bubble-menu on text selection.** Double-clicking a paragraph, icon-box
+  body, or any other widget field flagged `data-vb-html` now enters
+  contenteditable mode with a floating toolbar above the selection.
+  Buttons: **Bold · Italic · Underline · H2 · H3 · Paragraph · Bullet
+  list · Numbered list · Link · Unlink · Clear formatting**. Commit on
+  blur posts `innerHTML` (not `textContent`) to the parent, which
+  routes into the existing field-update DOMParser + replaceChildren
+  pipeline so HTML tags survive the round-trip into
+  `state.pending.content` and onward into the server-side HtmlField
+  sanitizer.
+
+- **Keyboard shortcuts** work out of the box: **Ctrl+B / Ctrl+I /
+  Ctrl+U** are wired by the browser through `execCommand` on
+  contenteditable — the bubble toolbar is additive UI, not a
+  replacement for the native shortcuts.
+
+- **URL safety gate on the Link button.** Host apps still run the
+  final HTML through `HtmlField → SanitizerInterface` (HTMLPurifier by
+  default) server-side, but we also whitelist the accepted URL shapes
+  at the UX boundary so broken pastes (`javascript:`, `data:` blobs)
+  never land in the DOM — the purifier stripping the whole anchor
+  tag silently later isn't a good user experience. Bare hostnames
+  (`example.com/foo`) auto-prepend `https://`.
+
+### Design notes
+
+- The package intentionally chose `document.execCommand` over a
+  framework dependency (TipTap / ProseMirror / Slate). Rationale:
+  zero external dependencies, zero CDN/bundler cost, works offline,
+  existing Ctrl+B keyboard shortcut is free. The feature surface
+  (bold / italic / underline / headings / lists / link) covers every
+  Paragraph / IconBox-body / custom HtmlField use case without
+  needing slash-commands or a virtual DOM on the editing side.
+
+### Not affected
+
+- Plain-text inline editing (Heading, Button label, …) still uses
+  the legacy `textContent`-commit path — attribute-selector split
+  between `[data-vb-editable]:not([data-vb-html])` and the new
+  `[data-vb-editable][data-vb-html]` handler.
+- Server-side storage shape for HTML fields is unchanged.
+
 ## [0.4.2] — 2026-04-17
 
 ### Added

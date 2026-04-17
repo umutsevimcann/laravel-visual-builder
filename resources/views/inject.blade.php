@@ -356,9 +356,12 @@
      * in place": dblclick a [data-vb-editable] → it becomes editable,
      * on blur the new text is posted to the parent which queues a save.
      *
-     * Skips [data-vb-html="1"] elements — those are rich-text (WYSIWYG)
-     * fields that belong in the traits panel's HTML editor, not raw
-     * contenteditable (would strip intended markup).
+     * Plain-text branch: strips all markup on commit (target.textContent).
+     * Use for headlines, labels, short strings. Rich-text fields are
+     * handled by the separate vb-html dblclick handler further down
+     * (bubble menu for bold / italic / link / heading / list) — the
+     * attribute selector here excludes them so the two handlers never
+     * race for the same event.
      */
     document.addEventListener('dblclick', function (e) {
         const target = e.target.closest('[data-vb-editable]');
@@ -405,6 +408,243 @@
                 target.blur();
             } else if (ev.key === 'Enter' && !ev.shiftKey) {
                 ev.preventDefault();
+                target.blur();
+            }
+        };
+
+        target.addEventListener('blur', commit);
+        target.addEventListener('keydown', keyHandler);
+    });
+
+    /**
+     * Rich-text inline editing for [data-vb-editable][data-vb-html] elements.
+     *
+     * Elementor-parity: double-click enters edit mode, a floating bubble
+     * menu appears above text selection with Bold / Italic / Underline /
+     * Link / H2 / H3 / UL / OL / Clear-formatting buttons. Commit on
+     * blur posts innerHTML (not textContent) to the parent via the
+     * same inline-edit postMessage the plain-text path uses — the
+     * field-update handler on the parent side knows to dispatch into
+     * DOMParser when the target element carries data-vb-html, so HTML
+     * tags survive the round-trip.
+     *
+     * Persistence: server-side HtmlField runs every value through the
+     * configured SanitizerInterface (HTMLPurifier by default) before
+     * storage, so the only untrusted surface here is the bubble menu's
+     * Link dialog — we gate the href through a URL constructor check
+     * and reject javascript: / data: schemes explicitly.
+     *
+     * Keyboard shortcuts (Ctrl+B, Ctrl+I, Ctrl+U) work out of the box
+     * because browsers map them to document.execCommand('bold') etc.
+     * inside contenteditable regions; the bubble menu is additive UI.
+     */
+    const VB_RTE_TOOLBAR_HTML = '<button type="button" data-vb-rte="bold" title="Bold (Ctrl+B)"><b>B</b></button>'
+        + '<button type="button" data-vb-rte="italic" title="Italic (Ctrl+I)"><i>I</i></button>'
+        + '<button type="button" data-vb-rte="underline" title="Underline (Ctrl+U)"><u>U</u></button>'
+        + '<span class="vb-rte-sep"></span>'
+        + '<button type="button" data-vb-rte="h2" title="Heading 2">H2</button>'
+        + '<button type="button" data-vb-rte="h3" title="Heading 3">H3</button>'
+        + '<button type="button" data-vb-rte="p" title="Paragraph">P</button>'
+        + '<span class="vb-rte-sep"></span>'
+        + '<button type="button" data-vb-rte="ul" title="Bullet list">•</button>'
+        + '<button type="button" data-vb-rte="ol" title="Numbered list">1.</button>'
+        + '<span class="vb-rte-sep"></span>'
+        + '<button type="button" data-vb-rte="link" title="Insert / edit link">🔗</button>'
+        + '<button type="button" data-vb-rte="unlink" title="Remove link">⊘</button>'
+        + '<span class="vb-rte-sep"></span>'
+        + '<button type="button" data-vb-rte="clear" title="Clear formatting">⎚</button>';
+
+    let vbRteBubble = null;
+    let vbRteActiveEl = null;
+
+    function vbRteEnsureBubble() {
+        if (vbRteBubble) return vbRteBubble;
+        const div = document.createElement('div');
+        div.className = 'vb-rte-bubble';
+        div.setAttribute('role', 'toolbar');
+        div.setAttribute('aria-label', 'Rich text formatting');
+        div.innerHTML = VB_RTE_TOOLBAR_HTML;
+        div.style.cssText = 'position:absolute;display:none;z-index:100000;background:#1f2937;color:#fff;'
+            + 'border-radius:6px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,0.25);font:12px/1 -apple-system,sans-serif;';
+        // Stop the editable from losing focus when a button is mouse-pressed.
+        div.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        div.addEventListener('click', vbRteHandleToolbar);
+        document.body.appendChild(div);
+
+        // Style every button: dense flat chips with hover.
+        const buttons = div.querySelectorAll('button');
+        buttons.forEach(function (b) {
+            b.style.cssText = 'background:transparent;color:#fff;border:0;padding:6px 8px;margin:0 1px;'
+                + 'border-radius:4px;cursor:pointer;font:inherit;min-width:28px';
+            b.addEventListener('mouseover', function () { b.style.background = 'rgba(255,255,255,0.12)'; });
+            b.addEventListener('mouseout', function () { b.style.background = 'transparent'; });
+        });
+        div.querySelectorAll('.vb-rte-sep').forEach(function (s) {
+            s.style.cssText = 'display:inline-block;width:1px;height:16px;background:rgba(255,255,255,0.2);vertical-align:middle;margin:0 4px';
+        });
+
+        vbRteBubble = div;
+        return div;
+    }
+
+    /** Position the bubble above the current selection, clamped to viewport. */
+    function vbRtePositionBubble() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+            if (vbRteBubble) vbRteBubble.style.display = 'none';
+            return;
+        }
+        const rect = sel.getRangeAt(0).getBoundingClientRect();
+        if (rect.width === 0 && rect.height === 0) {
+            if (vbRteBubble) vbRteBubble.style.display = 'none';
+            return;
+        }
+        const bubble = vbRteEnsureBubble();
+        bubble.style.display = 'block';
+        const bw = bubble.offsetWidth;
+        const bh = bubble.offsetHeight;
+        const scrollX = window.scrollX;
+        const scrollY = window.scrollY;
+        let top = rect.top + scrollY - bh - 8;
+        if (top < scrollY + 4) top = rect.bottom + scrollY + 8;
+        let left = rect.left + scrollX + (rect.width - bw) / 2;
+        const maxLeft = scrollX + document.documentElement.clientWidth - bw - 4;
+        if (left < scrollX + 4) left = scrollX + 4;
+        if (left > maxLeft) left = maxLeft;
+        bubble.style.top = top + 'px';
+        bubble.style.left = left + 'px';
+    }
+
+    /**
+     * Whether the selection lives inside an element currently marked as
+     * editing. Prevents the bubble from appearing when the user selects
+     * text anywhere else in the iframe (e.g. a read-only paragraph).
+     */
+    function vbRteSelectionInsideEditable() {
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return false;
+        let node = sel.getRangeAt(0).commonAncestorContainer;
+        if (node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+        if (!node) return false;
+        return node.closest('[data-vb-editable][data-vb-html][contenteditable="true"]') !== null;
+    }
+
+    /**
+     * Reject obviously dangerous URLs on the Link button. Package server
+     * still runs the full field through HTMLPurifier; this is a UX guard
+     * that stops `javascript:` entering the DOM at all, so broken pastes
+     * are never "fixed" by the purifier removing the whole anchor tag.
+     */
+    function vbRteSafeUrl(input) {
+        if (typeof input !== 'string') return '';
+        const trimmed = input.trim();
+        if (trimmed === '') return '';
+        // Allow protocol-relative, absolute http/https/mailto/tel, and
+        // relative paths (starts with / or #). Everything else is dropped.
+        if (/^(https?:|mailto:|tel:|\/\/|\/|#)/i.test(trimmed)) return trimmed;
+        if (/^[a-z0-9._~-]+(\.[a-z0-9._~-]+)+/i.test(trimmed)) {
+            // Bare "example.com/foo" → prepend https.
+            return 'https://'+trimmed;
+        }
+        return '';
+    }
+
+    function vbRteHandleToolbar(e) {
+        const btn = e.target.closest('button[data-vb-rte]');
+        if (!btn) return;
+        const action = btn.getAttribute('data-vb-rte');
+        e.preventDefault();
+
+        // document.execCommand is deprecated but universally supported and
+        // still the most portable way to format a selection inside a
+        // contenteditable region. Modern alternatives (Selection API +
+        // manual DOM surgery) require a lot of code for feature parity.
+        switch (action) {
+            case 'bold':
+            case 'italic':
+            case 'underline':
+                document.execCommand(action);
+                break;
+            case 'h2':
+            case 'h3':
+            case 'p':
+                document.execCommand('formatBlock', false, action);
+                break;
+            case 'ul':
+                document.execCommand('insertUnorderedList');
+                break;
+            case 'ol':
+                document.execCommand('insertOrderedList');
+                break;
+            case 'link': {
+                const existing = document.queryCommandValue('createLink') || '';
+                const url = vbRteSafeUrl(window.prompt('URL:', existing) || '');
+                if (url !== '') document.execCommand('createLink', false, url);
+                break;
+            }
+            case 'unlink':
+                document.execCommand('unlink');
+                break;
+            case 'clear':
+                document.execCommand('removeFormat');
+                break;
+        }
+        // Reposition — the selection geometry may have shifted.
+        vbRtePositionBubble();
+    }
+
+    document.addEventListener('selectionchange', function () {
+        if (!vbRteSelectionInsideEditable()) {
+            if (vbRteBubble) vbRteBubble.style.display = 'none';
+            return;
+        }
+        vbRtePositionBubble();
+    });
+
+    document.addEventListener('dblclick', function (e) {
+        const target = e.target.closest('[data-vb-editable][data-vb-html]');
+        if (!target) return;
+        if (target.isContentEditable) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const originalHtml = target.innerHTML;
+        target.setAttribute('contenteditable', 'true');
+        target.classList.add('vb-element-editing');
+        target.focus();
+
+        // Selection placed at the click point — DO NOT select-all like the
+        // plain-text path. Rich-text callers usually want to start typing
+        // at the click position, not overwrite the whole paragraph.
+        vbRteActiveEl = target;
+
+        const commit = function () {
+            target.removeAttribute('contenteditable');
+            target.classList.remove('vb-element-editing');
+            target.removeEventListener('blur', commit);
+            target.removeEventListener('keydown', keyHandler);
+            if (vbRteBubble) vbRteBubble.style.display = 'none';
+            vbRteActiveEl = null;
+
+            const newHtml = target.innerHTML;
+            if (newHtml === originalHtml) return;
+
+            window.parent.postMessage({
+                source: 'vb-iframe',
+                type: 'inline-edit',
+                sectionId: parseInt(target.getAttribute('data-vb-section-id'), 10),
+                fieldKey: target.getAttribute('data-vb-field'),
+                locale: target.getAttribute('data-vb-locale'),
+                value: newHtml,
+            }, allowedOrigin);
+        };
+
+        // Escape reverts; Enter on its own lets users break paragraphs
+        // (Shift+Enter is the usual "line break"). Commit is blur-driven.
+        const keyHandler = function (ev) {
+            if (ev.key === 'Escape') {
+                target.innerHTML = originalHtml;
                 target.blur();
             }
         };
