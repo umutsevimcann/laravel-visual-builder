@@ -31,6 +31,21 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.6.1] — 2026-04-17
+
+### Added — Tests
+
+- **10 new HTTP-layer feature tests for `TemplateController`** cover
+  the 4 endpoints shipped in v0.6.0 (index / store / apply /
+  destroy) against their contract: status codes, JSON shape,
+  validation errors for missing name + unknown mode, morph-map 404
+  for unknown target types, 404 for unknown template ids. The
+  domain layer was already locked by `TemplateLibraryTest`; this
+  closes the HTTP gap.
+
+Suite now at **149 tests / 446 assertions**. Pint + PHPStan level
+5 clean.
+
 ## [0.6.0] — 2026-04-17
 
 ### Added — Template library
