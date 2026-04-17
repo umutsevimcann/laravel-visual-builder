@@ -468,8 +468,17 @@
         const target = document.querySelector(
             '.vb-section-wrap[data-vb-section-id="' + CSS.escape(String(sectionId)) + '"]'
         );
-        if (target) {
-            target.classList.add('vb-selected');
+        if (!target) return;
+        target.classList.add('vb-selected');
+
+        // Only scroll when the section is entirely outside the iframe's
+        // viewport. Typing in an inline-editable field echoes a highlight
+        // back to the iframe on every keystroke; without this guard the
+        // preview would yank to-center on every character, dragging the
+        // text out from under the user's cursor.
+        const rect = target.getBoundingClientRect();
+        const outOfView = rect.bottom < 0 || rect.top > window.innerHeight;
+        if (outOfView) {
             target.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     }

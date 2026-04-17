@@ -1193,17 +1193,20 @@
     }
 
     /**
-     * Restore state from a snapshot entry. Because the server persists
-     * every content/style/visibility edit when the user hits Save, the
-     * DB may already hold values different from the restored snapshot.
-     * We fix this by synthesizing `state.pending` as "all sections
-     * rewritten to snapshot values" and auto-saving — the bulk save
-     * endpoint will push the restored values back to the DB.
+     * Restore state from a snapshot entry. Updates client state, marks
+     * the restored sections as pending so the user's Save button still
+     * persists them, and replays the snapshot to the iframe via
+     * postMessage — style-update for CSS and field-update for every
+     * content leaf — so the live preview reflects the restored values
+     * immediately WITHOUT a full iframe reload. The previous
+     * implementation auto-saved and reloaded the iframe, which caused
+     * a full-page flash on every Ctrl+Z.
      *
      * Structural differences (sections added/deleted since the snapshot)
-     * cannot be reconciled via the bulk endpoint; those are filtered out
-     * of the restoration and documented as a known limitation of v0.2.7
-     * undo.
+     * are not replayable via these messages — the history is already
+     * cleared on every structural op, so undo never crosses a structural
+     * anchor and this restore always sees a matching section list in
+     * the iframe DOM.
      */
     function restoreHistoryEntry(entry) {
         const restored = JSON.parse(entry.sections);
@@ -1223,8 +1226,49 @@
         if (state.selectedSectionId && findSection(state.selectedSectionId)) {
             renderTraits(state.selectedSectionId);
         }
-        save();
+        replaySnapshotToIframe(restored);
         updateUndoRedoButtons();
+    }
+
+    /**
+     * Push every content leaf + style + visibility of each section into
+     * the iframe DOM via postMessage. No-op when the iframe has not yet
+     * reported ready; the next reload will pick up the canonical state
+     * from the server once the user hits Save.
+     */
+    function replaySnapshotToIframe(sections) {
+        sections.forEach(function (s) {
+            postToIframe({ type: 'style-update', sectionId: s.id, style: s.style || {} });
+            postToIframe({ type: 'visibility-update', sectionId: s.id, fieldKey: null, visible: !!s.is_published });
+
+            const content = s.content || {};
+            Object.keys(content).forEach(function (key) {
+                const val = content[key];
+                if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+                    // Translatable field — locale map.
+                    Object.keys(val).forEach(function (locale) {
+                        postToIframe({
+                            type: 'field-update',
+                            sectionId: s.id,
+                            fieldKey: key,
+                            locale: locale,
+                            value: val[locale],
+                        });
+                    });
+                } else {
+                    // Scalar content field (non-translatable) — iframe
+                    // ignores unknown field keys silently, so broadcasting
+                    // every key is cheap even for non-text shapes.
+                    postToIframe({
+                        type: 'field-update',
+                        sectionId: s.id,
+                        fieldKey: key,
+                        locale: state.config.fallback_locale,
+                        value: val,
+                    });
+                }
+            });
+        });
     }
 
     function undo() {

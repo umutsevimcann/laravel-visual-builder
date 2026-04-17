@@ -31,6 +31,39 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.3.2] — 2026-04-17
+
+### Fixed
+
+- **Per-breakpoint style values now persist.** `UpdateSectionStyle`
+  filtered object-shape values through `is_scalar()` and silently
+  dropped them, so the client could promote `padding_y` to
+  `{desktop, tablet, mobile}` in the editor but the Save endpoint
+  would reject everything except the scalar leaf. v0.3.0 shipped
+  the UI and the resolver; this release wires the storage path end
+  to end. Scalar values keep working verbatim — only object shape
+  handling was broken.
+  Nine new unit tests cover the sanitization contract
+  (scalar + object + mixed + partial + empty slots + unknown breakpoint
+  keys + final null-on-empty behaviour).
+
+- **Undo / Redo no longer reloads the iframe.** The restore path
+  previously called `save()` to resync the DB and `save()` triggers
+  `reloadIframe()` on success — causing a whole-page flash on every
+  Ctrl+Z. Undo/Redo now replay the snapshot to the iframe via the
+  existing `style-update`, `visibility-update` and `field-update`
+  postMessage channels; the iframe DOM updates in place and the
+  user's Save button still persists the restored state when they
+  explicitly press Save.
+
+- **Iframe "Live Preview" no longer auto-scrolls on every inline
+  edit.** `highlightSection()` inside the iframe unconditionally
+  called `scrollIntoView({ block: 'center' })`, which pulled the
+  preview to-center every time the parent panel echoed a highlight —
+  e.g. on every keystroke in an inline-editable field. Now only
+  scrolls when the target section is entirely above or below the
+  iframe viewport; a partially-visible section stays where it is.
+
 ## [0.3.1] — 2026-04-17
 
 ### Fixed
