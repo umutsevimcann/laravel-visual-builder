@@ -31,6 +31,28 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.2.7] — 2026-04-17
+
+### Added
+
+- **Undo / Redo for content, style and visibility edits.** The two
+  history buttons at the top of the editor (and `Ctrl+Z` / `Ctrl+Y` /
+  `Ctrl+Shift+Z`) now work. Each edit cluster (typing runs, style
+  tweaks, publish toggles) captures a snapshot after 400 ms of idle;
+  the stack holds 50 entries. Undo restores the snapshot, rebuilds
+  `state.pending` as a full rewrite of every affected section, and
+  auto-saves so the DB matches — the iframe reload then reflects the
+  restored state end-to-end.
+
+### Known limitations
+
+- Structural operations (add / duplicate / delete / move) reset the
+  history to a new baseline. They are persisted immediately by the
+  server and the bulk save endpoint cannot recreate a deleted row, so
+  letting undo cross a structural anchor would desync client and DB.
+  Full structural history is planned for v0.4 along with revision
+  storage.
+
 ## [0.2.6] — 2026-04-17
 
 ### Fixed

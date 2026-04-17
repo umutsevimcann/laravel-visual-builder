@@ -81,6 +81,18 @@
             sections: {},
             orderedIds: null,
         },
+        // Undo/redo history — snapshots of state.config.sections captured
+        // when an edit cluster settles (400ms idle). Structural ops
+        // (add/delete/duplicate) reset the history to a new baseline
+        // because the server persists them immediately and the bulk
+        // save endpoint cannot recreate deleted rows.
+        history: {
+            entries: [],       // { sections: JSON string, label: string }
+            current: -1,       // index of the active snapshot (−1 = empty)
+            max: 50,
+            clusterTimer: null,
+            clusterMs: 400,
+        },
     };
 
     // ─────────────────────────────────────────────────────────────
@@ -190,6 +202,11 @@
         if (data && Array.isArray(data.sections)) {
             state.config.sections = data.sections;
         }
+        // Structural changes persist immediately server-side; the bulk
+        // save endpoint cannot recreate a deleted row, so rather than
+        // let undo desync client and server, clear the history and seed
+        // a new baseline at this structural anchor.
+        resetHistoryBaseline('structural');
         // Re-render block palette — singleton constraints (one-per-target)
         // depend on which section types currently exist on the target.
         renderBlockPalette();
@@ -994,6 +1011,158 @@
     }
 
     // ─────────────────────────────────────────────────────────────
+    // Undo / Redo history
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Push a snapshot of the current sections onto the history stack.
+     * Truncates any forward entries (the redo tail) because committing
+     * a new change means the user has abandoned that branch. Oldest
+     * entries are evicted when the stack exceeds `state.history.max`.
+     */
+    function pushHistorySnapshot(label) {
+        const h = state.history;
+        if (h.current < h.entries.length - 1) {
+            h.entries.length = h.current + 1;
+        }
+        h.entries.push({
+            sections: JSON.stringify(state.config.sections),
+            label: label || '',
+        });
+        if (h.entries.length > h.max) {
+            h.entries.shift();
+        } else {
+            h.current++;
+        }
+        updateUndoRedoButtons();
+    }
+
+    /**
+     * Debounced history capture — used by applyPendingChange. Typing
+     * rapidly fires one input event per keystroke, so we wait until
+     * the user has been idle `clusterMs` before recording a snapshot.
+     * This gives word-level undo granularity instead of one entry per
+     * character.
+     */
+    function scheduleHistoryCapture(label) {
+        const h = state.history;
+        if (h.clusterTimer) clearTimeout(h.clusterTimer);
+        h.clusterTimer = setTimeout(function () {
+            h.clusterTimer = null;
+            pushHistorySnapshot(label);
+        }, h.clusterMs);
+    }
+
+    /**
+     * Flush a pending cluster capture immediately — called before any
+     * undo/redo/save so the "current state" is always represented in
+     * the history before we move off it.
+     */
+    function flushHistoryCluster() {
+        const h = state.history;
+        if (h.clusterTimer) {
+            clearTimeout(h.clusterTimer);
+            h.clusterTimer = null;
+            pushHistorySnapshot('flush');
+        }
+    }
+
+    /**
+     * Clear history and seed a new baseline. Called after structural
+     * operations (create/duplicate/delete/move) because those mutate
+     * the server immediately and the bulk save endpoint cannot recreate
+     * a row it already deleted — trying to undo across a structural op
+     * would desync client and server.
+     */
+    function resetHistoryBaseline(label) {
+        const h = state.history;
+        h.entries = [];
+        h.current = -1;
+        if (h.clusterTimer) {
+            clearTimeout(h.clusterTimer);
+            h.clusterTimer = null;
+        }
+        pushHistorySnapshot(label || 'baseline');
+    }
+
+    /**
+     * Restore state from a snapshot entry. Because the server persists
+     * every content/style/visibility edit when the user hits Save, the
+     * DB may already hold values different from the restored snapshot.
+     * We fix this by synthesizing `state.pending` as "all sections
+     * rewritten to snapshot values" and auto-saving — the bulk save
+     * endpoint will push the restored values back to the DB.
+     *
+     * Structural differences (sections added/deleted since the snapshot)
+     * cannot be reconciled via the bulk endpoint; those are filtered out
+     * of the restoration and documented as a known limitation of v0.2.7
+     * undo.
+     */
+    function restoreHistoryEntry(entry) {
+        const restored = JSON.parse(entry.sections);
+        state.config.sections = restored;
+        state.pending = {
+            sections: restored.reduce(function (acc, s) {
+                acc[s.id] = {
+                    content: s.content || {},
+                    style: s.style || {},
+                    is_published: !!s.is_published,
+                };
+                return acc;
+            }, {}),
+            orderedIds: null,
+        };
+        markDirty();
+        if (state.selectedSectionId && findSection(state.selectedSectionId)) {
+            renderTraits(state.selectedSectionId);
+        }
+        save();
+        updateUndoRedoButtons();
+    }
+
+    function undo() {
+        flushHistoryCluster();
+        const h = state.history;
+        if (h.current <= 0) return;
+        h.current--;
+        restoreHistoryEntry(h.entries[h.current]);
+    }
+
+    function redo() {
+        flushHistoryCluster();
+        const h = state.history;
+        if (h.current >= h.entries.length - 1) return;
+        h.current++;
+        restoreHistoryEntry(h.entries[h.current]);
+    }
+
+    function updateUndoRedoButtons() {
+        const h = state.history;
+        const undoBtn = document.querySelector('[data-vb-action="undo"]');
+        const redoBtn = document.querySelector('[data-vb-action="redo"]');
+        if (undoBtn) undoBtn.disabled = h.current <= 0;
+        if (redoBtn) redoBtn.disabled = h.current >= h.entries.length - 1;
+    }
+
+    /** Bind Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z. Inputs keep native undo. */
+    function bindUndoRedoShortcuts() {
+        window.addEventListener('keydown', function (e) {
+            const tag = (e.target && e.target.tagName) || '';
+            const editable = e.target && e.target.isContentEditable;
+            if (editable || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            if (!(e.ctrlKey || e.metaKey)) return;
+            const key = (e.key || '').toLowerCase();
+            if (key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                undo();
+            } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+                e.preventDefault();
+                redo();
+            }
+        });
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // Pending state
     // ─────────────────────────────────────────────────────────────
 
@@ -1008,6 +1177,7 @@
         state.pending.sections[sectionId].is_published = section.is_published;
 
         markDirty();
+        scheduleHistoryCapture('edit');
     }
 
     function markDirty() {
@@ -1028,6 +1198,11 @@
     // ─────────────────────────────────────────────────────────────
 
     async function save() {
+        // If the user clicks Save mid-cluster (before the 400ms idle
+        // timer fires), we still want the pre-save state in history so
+        // undo after save can return to it.
+        flushHistoryCluster();
+
         const payload = {};
         if (state.pending.orderedIds) payload.ordered_ids = state.pending.orderedIds;
         if (Object.keys(state.pending.sections).length) payload.sections = state.pending.sections;
@@ -1161,7 +1336,8 @@
         else if (action === 'site-settings') openSiteSettings();
         else if (action === 'navigator') toggleNavigator();
         else if (action === 'revisions') openRevisions();
-        // undo/redo are disabled in the view — history stack ships in v0.4
+        else if (action === 'undo') undo();
+        else if (action === 'redo') redo();
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1395,7 +1571,12 @@
 
         renderBlockPalette();
         bindToolbar();
+        bindUndoRedoShortcuts();
         initIframeMessaging();
+
+        // Seed the history with the initial state so the very first
+        // undo has somewhere to return to.
+        resetHistoryBaseline('initial');
 
         // Belt-and-suspenders loading overlay dismissal: the iframe posts
         // a 'loaded' message to the parent when its DOM is ready, but if
