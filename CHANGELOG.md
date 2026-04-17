@@ -31,6 +31,48 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.4.0] — 2026-04-17
+
+### Added
+
+- **Atomic widgets — Elementor-style building blocks.** Five
+  first-class, built-in section types ship with the package:
+  **Heading**, **Paragraph**, **Button**, **Spacer**, **Divider**.
+  Each is a `SectionTypeInterface` implementation living under
+  `Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\*` and
+  extending a new `AbstractAtomicWidget` base that defaults
+  `allowsMultipleInstances=true`, `isDeletable=true` and routes
+  `viewPartial()` to `visual-builder::widgets.{key}` by convention.
+
+- **`visual-builder.widgets` config block.** Registration is opt-in
+  via `enabled: true`. The `list` array selects which widgets appear
+  in the host's block palette — unknown keys are silently ignored so
+  trimming a widget is a one-line change. Host-app registrations for
+  the same key always win (the package checks `$registry->has($key)`
+  before registering, sidestepping the duplicate-key exception
+  `SectionTypeRegistry::register()` throws).
+
+- **Widget Blade partials** — one per widget, published under
+  `resources/views/widgets/`. Each partial emits the minimum semantic
+  markup with the standard `data-vb-editable` / `data-vb-field`
+  attributes the iframe click handlers depend on. Inline edits work
+  in the admin iframe immediately; the public frontend renders the
+  same partial without the builder-mode wrapper.
+
+- **Test coverage.** 16 new tests (10 unit on widget schemas, 4
+  feature on registration toggle, plus existing 5 on the resolver
+  widgets touch) lock the public shape of every widget — keys, field
+  names, field types, default content / style — so future renames or
+  type-churn show up as a red test before they desync the iframe
+  click handlers. Total suite: **109 tests / 266 assertions**.
+
+### Not yet
+
+- **Image / Video / Icon / IconBox** widgets land in **v0.4.1**.
+- **Columns** widget with nested children lands in **v0.4.2**
+  alongside a `parent_section_id` migration.
+- **TipTap** swap on the Paragraph widget lands in **v0.4.3**.
+
 ## [0.3.3] — 2026-04-17
 
 ### Fixed

@@ -161,6 +161,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Atomic widgets (Elementor-style building blocks)
+    |--------------------------------------------------------------------------
+    |
+    | The package ships a set of small, single-purpose section types
+    | (Heading, Paragraph, Button, Spacer, Divider — more arrive in the
+    | 0.4.x line) under `Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\*`.
+    |
+    | Registration is OPT-IN. Host apps that already ship their own
+    | domain-specific sections (Hero, AboutBox, PricingTable …) leave
+    | `enabled` as false to keep their block palette clean. Set it to
+    | true — and optionally trim the `list` — to surface the widgets in
+    | the admin block palette and expose them to content editors.
+    |
+    */
+    'widgets' => [
+        'enabled' => false,
+        // Names correspond to each widget's key() method. Unknown keys
+        // are silently ignored so removing one from this list disables
+        // it without touching the service provider.
+        'list' => [
+            'heading',
+            'paragraph',
+            'button',
+            'spacer',
+            'divider',
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Responsive breakpoints
     |--------------------------------------------------------------------------
     |

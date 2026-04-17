@@ -15,6 +15,11 @@ use Umutsevimcann\VisualBuilder\Contracts\MediaServiceInterface;
 use Umutsevimcann\VisualBuilder\Contracts\SanitizerInterface;
 use Umutsevimcann\VisualBuilder\Domain\Models\BuilderSection;
 use Umutsevimcann\VisualBuilder\Domain\Sections\SectionTypeRegistry;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ButtonWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\DividerWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\HeadingWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\ParagraphWidget;
+use Umutsevimcann\VisualBuilder\Domain\Sections\Widgets\SpacerWidget;
 use Umutsevimcann\VisualBuilder\Domain\Services\BreakpointStyleResolver;
 use Umutsevimcann\VisualBuilder\Domain\Services\DesignTokenService;
 use Umutsevimcann\VisualBuilder\Infrastructure\Media\StorageMediaService;
@@ -135,6 +140,15 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             return "<?php echo \\Umutsevimcann\\VisualBuilder\\VisualBuilder::sectionStylesTag({$expression}); ?>";
         });
 
+        // Atomic widgets: opt-in via config. When enabled, the package's
+        // built-in Heading/Paragraph/Button/Spacer/Divider section types
+        // land in the host's SectionTypeRegistry and appear in the block
+        // palette. Host apps that only want their own domain-specific
+        // sections keep `widgets.enabled` false (the default).
+        if (config('visual-builder.widgets.enabled', false) === true) {
+            $this->registerAtomicWidgets();
+        }
+
         if (config('visual-builder.routes.enabled', true) === false) {
             return;
         }
@@ -148,5 +162,54 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
             ->middleware($middleware)
             ->name($namePrefix)
             ->group(__DIR__.'/../routes/web.php');
+    }
+
+    /**
+     * Register the built-in atomic widgets into the SectionTypeRegistry
+     * according to the host's `visual-builder.widgets.list` config.
+     *
+     * Widget keys missing from the config list are simply skipped —
+     * host apps trim the list to hide a specific widget without needing
+     * to fork the service provider. Unknown keys in the list are
+     * silently ignored so a typo never crashes the boot sequence.
+     *
+     * Re-registration is safe: SectionTypeRegistry::register() overwrites
+     * by key, so an explicit host-app registration for the same key
+     * (e.g. a custom Heading) wins when it runs after this provider.
+     */
+    private function registerAtomicWidgets(): void
+    {
+        /** @var array<int, string> $wanted */
+        $wanted = (array) config('visual-builder.widgets.list', []);
+        if ($wanted === []) {
+            return;
+        }
+
+        $available = [
+            'heading' => HeadingWidget::class,
+            'paragraph' => ParagraphWidget::class,
+            'button' => ButtonWidget::class,
+            'spacer' => SpacerWidget::class,
+            'divider' => DividerWidget::class,
+        ];
+
+        /** @var SectionTypeRegistry $registry */
+        $registry = $this->app->make(SectionTypeRegistry::class);
+
+        foreach ($wanted as $key) {
+            if (! isset($available[$key])) {
+                continue;
+            }
+            // Host app already registered a same-key section type — let
+            // it win. This keeps registration order deterministic: host
+            // AppServiceProvider runs AFTER our provider in the boot
+            // cycle, so if the host registers first (e.g. in register())
+            // our widget is skipped rather than triggering the duplicate
+            // key exception SectionTypeRegistry::register() throws.
+            if ($registry->has($key)) {
+                continue;
+            }
+            $registry->register($this->app->make($available[$key]));
+        }
     }
 }
