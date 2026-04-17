@@ -296,6 +296,28 @@
                 createSection(btn.getAttribute('data-vb-block'));
             });
         });
+
+        // v0.5.1 — HTML5 drag-drop: card → iframe inserter. The iframe
+        // receives the widget type via dataTransfer with a dedicated
+        // MIME; filters every other drag event out so OS file drags can
+        // never trigger a section create. Sends postMessage ping so the
+        // iframe can reveal every inserter for the duration of the drag.
+        container.querySelectorAll('[data-vb-block]:not([disabled])').forEach(function (btn) {
+            btn.addEventListener('dragstart', function (e) {
+                if (!e.dataTransfer) return;
+                e.dataTransfer.effectAllowed = 'copy';
+                e.dataTransfer.setData('application/x-vb-widget-type', btn.getAttribute('data-vb-block'));
+                // Safari: a string payload must be set on a generic type
+                // too or the drag image becomes blank.
+                e.dataTransfer.setData('text/plain', btn.getAttribute('data-vb-block'));
+                btn.classList.add('vb-palette-card-dragging');
+                postToIframe({ type: 'palette-drag-start' });
+            });
+            btn.addEventListener('dragend', function () {
+                btn.classList.remove('vb-palette-card-dragging');
+                postToIframe({ type: 'palette-drag-end' });
+            });
+        });
     }
 
     async function createSection(typeKey) {
@@ -1554,8 +1576,56 @@
                 case 'move-down':
                     moveSection(msg.sectionId, 'down');
                     break;
+                case 'palette-drop':
+                    // v0.5.1 — user dragged a palette card onto an
+                    // iframe inserter strip. Create the section there
+                    // directly (bypass the click path's insert-mode
+                    // state machine — the drop target already carries
+                    // the precise insertion point).
+                    createSectionAt(msg.typeKey, msg.afterSectionId);
+                    break;
             }
         });
+    }
+
+    /**
+     * Direct create-at-position used by the drag-drop path. Mirrors
+     * createSection() but takes the afterSectionId as an explicit
+     * parameter instead of reading the pendingInsertAfter state —
+     * drag-drop bypasses the click-driven "insert mode" entirely.
+     */
+    async function createSectionAt(typeKey, afterSectionId) {
+        if (typeof typeKey !== 'string' || typeKey === '') return;
+        if (state.dirty && !confirm('Discard unsaved changes and add a new section?')) {
+            return;
+        }
+
+        const params = new URLSearchParams();
+        params.append('type', typeKey);
+        params.append('_token', state.config.csrf_token);
+        if (afterSectionId != null) params.append('after_section_id', String(afterSectionId));
+
+        try {
+            const response = await fetch(state.config.routes.store, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRF-TOKEN': state.config.csrf_token,
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json',
+                },
+                body: params.toString(),
+            });
+            if (response.ok) {
+                const data = await response.json();
+                applyMutationResponse(data);
+                return;
+            }
+            console.error('[VBuilder] Drag-drop create failed:', response.status);
+        } catch (err) {
+            console.error('[VBuilder] Drag-drop create error:', err);
+        }
     }
 
     // ─────────────────────────────────────────────────────────────

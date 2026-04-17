@@ -31,6 +31,54 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.5.1] — 2026-04-17
+
+### Added
+
+- **Drag-drop from the block palette onto iframe drop zones.** Each
+  palette card is now natively `draggable="true"` (pre-wired since
+  v0.5.0). Dragging one starts an HTML5 drag event with a
+  package-specific MIME type (`application/x-vb-widget-type`) carrying
+  the widget key. The iframe's existing `+` inserter strips between
+  every pair of sections double as drop targets — dropping on one
+  creates the new section at that exact position, no "insert mode"
+  click dance required.
+
+- **Mid-drag visual feedback.**
+  - The parent broadcasts `palette-drag-start` when a card's
+    `dragstart` fires; the iframe toggles `body.vb-drag-active`
+    which reveals every inserter strip for the duration of the drag
+    (the hover-reveal becomes always-on so users never have to
+    chase a disappearing target).
+  - The hovered inserter picks up `.vb-inserter-drop-active` on
+    `dragover` and drops the class on `dragleave` / `drop`, so the
+    user sees a thick blue bar and a scaled-up "+" icon exactly
+    where the section will land.
+
+### Design notes
+
+- Zero JS dependencies. No SortableJS, no drag library. Native
+  HTML5 DnD works cross-frame because the iframe and parent share
+  the origin — `dataTransfer.setData()` in the parent is readable by
+  `dataTransfer.getData()` inside the iframe's drop handler.
+- The dataTransfer MIME filter (`application/x-vb-widget-type`) is
+  strict so OS file drags onto the preview never accidentally
+  trigger a section create — `dragover` bails out immediately when
+  the dataTransfer type list does not include the widget MIME.
+- `dragover` ALWAYS calls `preventDefault()` on matched types — the
+  browser otherwise marks the zone as non-droppable and silently
+  drops the `drop` event.
+
+### Compatibility
+
+- The existing click-to-insert flow (inserter `+` click → block
+  palette click) stays working exactly as before. Drag-drop is
+  additive; users who prefer clicks never notice the change.
+- `insert-requested` / `enter-insert-mode` message protocol is
+  untouched. The new drag path uses a dedicated `palette-drop`
+  message that carries the target directly, so there is no shared
+  state machine between the two flows to race.
+
 ## [0.5.0] — 2026-04-17
 
 ### Added

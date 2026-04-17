@@ -216,6 +216,47 @@
     }
 
     /* ================================================================
+       v0.5.1 — drag-drop visual states for palette → iframe drops.
+       `body.vb-drag-active` is toggled by the parent editor's
+       palette-drag-start / palette-drag-end postMessages; it reveals
+       every inserter unconditionally so the user always has a visible
+       drop target mid-drag.
+       `.vb-inserter-drop-active` is toggled by the inserter's own
+       dragover/dragleave handlers and adds a thicker highlight + the
+       "+" button stays prominent over the hovered zone.
+       ================================================================ */
+
+    body.vb-drag-active .vb-inserter {
+        background-color: rgba(37, 99, 235, 0.06);
+    }
+
+    body.vb-drag-active .vb-inserter::before {
+        background-color: rgba(37, 99, 235, 0.55);
+        height: 4px;
+    }
+
+    body.vb-drag-active .vb-inserter-btn {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15), 0 4px 12px rgba(37, 99, 235, 0.35);
+    }
+
+    .vb-inserter-drop-active {
+        background-color: rgba(37, 99, 235, 0.18) !important;
+    }
+
+    .vb-inserter-drop-active::before {
+        background-color: #1d4ed8 !important;
+        height: 6px !important;
+        box-shadow: 0 0 0 2px rgba(29, 78, 216, 0.25);
+    }
+
+    .vb-inserter-drop-active .vb-inserter-btn {
+        background-color: #1d4ed8 !important;
+        transform: scale(1.15) !important;
+    }
+
+    /* ================================================================
        Hover toolbar — floats above selected section with quick
        actions (duplicate, move up/down, delete). Positioned via
        absolute + pointer-events:auto so clicks land reliably.
@@ -698,6 +739,19 @@
             case 'visibility-update':
                 updateVisibilityInDom(msg.sectionId, msg.fieldKey, msg.visible);
                 break;
+            case 'palette-drag-start':
+                // Parent is dragging a palette card. Reveal every
+                // inserter so the user has an unambiguous target even
+                // between tall sections where the hover-reveal
+                // animation is awkward mid-drag.
+                document.body.classList.add('vb-drag-active');
+                break;
+            case 'palette-drag-end':
+                document.body.classList.remove('vb-drag-active');
+                document.querySelectorAll('.vb-inserter-drop-active').forEach(function (el) {
+                    el.classList.remove('vb-inserter-drop-active');
+                });
+                break;
         }
     });
 
@@ -1020,6 +1074,11 @@
     /**
      * Build a `.vb-inserter` DIV with a "+" button. `afterSectionId` tells
      * the parent where to inject the new section (null = prepend to first).
+     *
+     * v0.5.1 — doubles as an HTML5 drag drop target. While the parent
+     * window is dragging a palette card, every inserter turns on via
+     * body.vb-drag-active (CSS), and dragging over one highlights it so
+     * the user sees precisely where the new section will land.
      */
     function buildInserter(afterSectionId) {
         const strip = document.createElement('div');
@@ -1037,6 +1096,36 @@
             window.parent.postMessage({
                 source: 'vb-iframe',
                 type: 'insert-requested',
+                afterSectionId: afterSectionId,
+            }, allowedOrigin);
+        });
+
+        // Drag-drop wiring. dragover MUST preventDefault or the browser
+        // treats the zone as non-droppable and 'drop' never fires. The
+        // dataTransfer.types list is accessible on dragover; actual data
+        // only on drop. Filter by the widget-type MIME so stray
+        // drag-drops from outside the builder (e.g. a file drag from
+        // the OS) don't accidentally create sections.
+        strip.addEventListener('dragover', function (e) {
+            if (!e.dataTransfer || !e.dataTransfer.types) return;
+            if (Array.prototype.indexOf.call(e.dataTransfer.types, 'application/x-vb-widget-type') === -1) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            strip.classList.add('vb-inserter-drop-active');
+        });
+        strip.addEventListener('dragleave', function () {
+            strip.classList.remove('vb-inserter-drop-active');
+        });
+        strip.addEventListener('drop', function (e) {
+            if (!e.dataTransfer) return;
+            const typeKey = e.dataTransfer.getData('application/x-vb-widget-type');
+            if (!typeKey) return;
+            e.preventDefault();
+            strip.classList.remove('vb-inserter-drop-active');
+            window.parent.postMessage({
+                source: 'vb-iframe',
+                type: 'palette-drop',
+                typeKey: typeKey,
                 afterSectionId: afterSectionId,
             }, allowedOrigin);
         });
