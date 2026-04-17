@@ -33,7 +33,7 @@ it('wraps CSS in a <style> tag tagged with the section id', function (): void {
     expect($html)
         ->toStartWith('<style data-vb-section-styles="7">')
         ->toEndWith('</style>')
-        ->toContain('[data-vb-section-id="7"]')
+        ->toContain('[data-vb-section-id="7"]:not([data-vb-editable])')
         ->toContain('background-color: #ff0000');
 });
 

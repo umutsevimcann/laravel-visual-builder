@@ -96,6 +96,38 @@ final class BreakpointStyleResolver
     ];
 
     /**
+     * Style keys that are stored but NOT emitted as CSS declarations.
+     *
+     * `animation` and `animation_delay` are consumed by host templates as
+     * CSS CLASS names (e.g. `vb-anim-fadeIn`, `vb-anim-delay-500`) not as
+     * CSS `animation:` shorthand values. Emitting `animation: fadeIn` on
+     * the wrapper would also cascade through descendant attribute
+     * selectors and clobber any in-flight animation on editable children
+     * (concrete incident: IFEX's `.fadeDownShort` on h1 was replaced by
+     * a zero-duration fadeIn that left the element at opacity:0).
+     *
+     * @var list<string>
+     */
+    private const CSS_SKIPPED_KEYS = ['animation', 'animation_delay'];
+
+    /**
+     * Spacing keys where a bare numeric value gets `px` appended on
+     * emission. Legacy seeded data stored values like `"40"` without a
+     * unit; browsers reject `padding-top: 40` as invalid and fall back to
+     * the default (0px), which silently loses the spacing override. We
+     * auto-append `px` only for these keys — color / alignment / font
+     * family values stay verbatim.
+     *
+     * @var list<string>
+     */
+    private const UNITLESS_PX_KEYS = [
+        'padding_y', 'padding_x',
+        'padding_top', 'padding_right', 'padding_bottom', 'padding_left',
+        'margin_y', 'margin_x',
+        'margin_top', 'margin_right', 'margin_bottom', 'margin_left',
+    ];
+
+    /**
      * Maximum viewport width (inclusive) at which the tablet breakpoint
      * applies. Default matches Bootstrap 5's `lg` boundary — 1023px.
      */
@@ -279,12 +311,32 @@ final class BreakpointStyleResolver
     {
         $out = [];
         foreach ($resolved as $key => $value) {
+            if (in_array($key, self::CSS_SKIPPED_KEYS, true)) {
+                continue;
+            }
+            $cssValue = $this->cssValueFor($key, $value);
             foreach ($this->cssPropertiesFor($key) as $cssProp) {
-                $out[] = sprintf('%s: %s !important', $cssProp, $value);
+                $out[] = sprintf('%s: %s !important', $cssProp, $cssValue);
             }
         }
 
         return implode('; ', $out);
+    }
+
+    /**
+     * Normalize a resolved value before it hits the CSS declaration. The
+     * only current transformation is appending `px` to bare numeric values
+     * for spacing keys; everything else passes through verbatim. Keeping
+     * the transformation localized means colour / text / font-family
+     * values never get accidentally rewritten.
+     */
+    private function cssValueFor(string $key, string $value): string
+    {
+        if (in_array($key, self::UNITLESS_PX_KEYS, true) && is_numeric($value)) {
+            return $value.'px';
+        }
+
+        return $value;
     }
 
     /**

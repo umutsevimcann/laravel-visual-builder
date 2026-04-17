@@ -149,6 +149,53 @@ describe('toCss() — shape and structure', function (): void {
             ->and($css)->not->toContain('@media (max-width: 1023px)');
     });
 
+    it('appends px to bare numeric spacing values (legacy seeded data)', function (): void {
+        $css = $this->resolver->toCss(
+            ['padding_y' => '80', 'padding_top' => '12', 'margin_left' => '8'],
+            '.s-1'
+        );
+
+        expect($css)->toContain('padding-top: 80px !important')
+            ->and($css)->toContain('padding-bottom: 80px !important')
+            ->and($css)->toContain('margin-left: 8px !important')
+            ->and($css)->not->toContain(': 80 !important')
+            ->and($css)->not->toContain(': 8 !important');
+    });
+
+    it('keeps already-unitted spacing values verbatim', function (): void {
+        $css = $this->resolver->toCss(
+            ['padding_y' => '5rem', 'margin_top' => '2vh'],
+            '.s-1'
+        );
+
+        expect($css)->toContain('padding-top: 5rem')
+            ->and($css)->toContain('margin-top: 2vh');
+    });
+
+    it('never appends px to non-spacing keys', function (): void {
+        $css = $this->resolver->toCss(
+            ['bg_color' => '#ff0000', 'alignment' => '123'],
+            '.s-1'
+        );
+
+        // Alignment `123` is nonsensical but must pass through unchanged —
+        // otherwise text colour / font family would also get px appended.
+        expect($css)->toContain('text-align: 123 !important')
+            ->and($css)->not->toContain('text-align: 123px');
+    });
+
+    it('skips animation and animation_delay keys entirely', function (): void {
+        $css = $this->resolver->toCss(
+            ['animation' => 'fadeIn', 'animation_delay' => '200ms', 'bg_color' => '#ff0000'],
+            '.s-1'
+        );
+
+        expect($css)->toContain('background-color: #ff0000')
+            ->and($css)->not->toContain('animation:')
+            ->and($css)->not->toContain('animation-delay:')
+            ->and($css)->not->toContain('fadeIn');
+    });
+
     it('omits the tablet @media block entirely when tablet equals desktop after inheritance', function (): void {
         // Only desktop defined → tablet inherits desktop → no diff → no @media.
         $css = $this->resolver->toCss(

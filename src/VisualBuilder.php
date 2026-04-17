@@ -48,7 +48,18 @@ final class VisualBuilder
 
         /** @var BreakpointStyleResolver $resolver */
         $resolver = app(BreakpointStyleResolver::class);
-        $selector = sprintf('[data-vb-section-id="%s"]', $id);
+        // :not([data-vb-editable]) — the editable descendants (h1, p, img
+        // etc.) carry the same data-vb-section-id attribute so the iframe
+        // click handlers can identify their owning section. Without the
+        // :not() filter, any CSS we emit here (padding, animation, colors)
+        // cascades onto every inline-editable child and can break host
+        // animations — a concrete incident: `animation: fadeIn !important`
+        // on the wrapper was inherited by .vb-section-wrap but the attr
+        // selector ALSO matched the <h1> that carried the same attr, so
+        // IFEX's `.fadeDownShort` animation was overridden with a
+        // zero-duration fadeIn whose fill-mode=none left the h1 at
+        // opacity:0. The :not() excludes the editable descendants.
+        $selector = sprintf('[data-vb-section-id="%s"]:not([data-vb-editable])', $id);
         $css = $resolver->toCss($style, $selector);
 
         if ($css === '') {

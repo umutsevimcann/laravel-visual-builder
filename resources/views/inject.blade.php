@@ -551,6 +551,17 @@
         text_color: 'color',
     };
 
+    /** Keys NOT emitted as CSS — handled by host templates via class names. */
+    const VB_CSS_SKIPPED_KEYS = ['animation', 'animation_delay'];
+
+    /** Spacing keys where a bare numeric value gets `px` appended. */
+    const VB_UNITLESS_PX_KEYS = [
+        'padding_y', 'padding_x',
+        'padding_top', 'padding_right', 'padding_bottom', 'padding_left',
+        'margin_y', 'margin_x',
+        'margin_top', 'margin_right', 'margin_bottom', 'margin_left',
+    ];
+
     /**
      * Resolve one style value for a specific breakpoint. Scalars return
      * as-is; object values walk VB_BP_INHERIT until a non-empty leaf is
@@ -590,11 +601,24 @@
     function vbDeclsFor(resolved) {
         const parts = [];
         for (const k of Object.keys(resolved)) {
+            if (VB_CSS_SKIPPED_KEYS.indexOf(k) !== -1) continue;
+            const value = vbCssValueFor(k, resolved[k]);
             for (const prop of vbCssPropsFor(k)) {
-                parts.push(prop + ': ' + resolved[k] + ' !important');
+                parts.push(prop + ': ' + value + ' !important');
             }
         }
         return parts.join('; ');
+    }
+
+    /** Append `px` to bare numeric spacing values; other keys verbatim. */
+    function vbCssValueFor(key, value) {
+        if (VB_UNITLESS_PX_KEYS.indexOf(key) !== -1
+            && value !== ''
+            && !isNaN(value)
+            && !isNaN(parseFloat(value))) {
+            return value + 'px';
+        }
+        return value;
     }
 
     /** Entries of `over` that differ from `base` — drives @media blocks. */
@@ -614,7 +638,11 @@
      * stay cascade-equivalent when the user is editing.
      */
     function vbBuildSectionCss(sectionId, style) {
-        const selector = '[data-vb-section-id="' + String(sectionId) + '"]';
+        // :not([data-vb-editable]) — keeps the cascade from escaping into
+        // the editable descendants (h1, p, img) that carry the same
+        // data-vb-section-id attribute for click routing. Matches the
+        // server-side VisualBuilder::sectionStylesTag selector exactly.
+        const selector = '[data-vb-section-id="' + String(sectionId) + '"]:not([data-vb-editable])';
         const desktop = vbResolveAll(style, 'desktop');
         const tablet = vbResolveAll(style, 'tablet');
         const mobile = vbResolveAll(style, 'mobile');

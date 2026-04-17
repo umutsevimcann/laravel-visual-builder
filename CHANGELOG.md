@@ -31,6 +31,46 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.3.3] — 2026-04-17
+
+### Fixed
+
+- **Headline / subtitle / any inline-editable child going invisible
+  after the @vbSectionStyles directive renders.** The CSS emitted by
+  the directive used the plain attribute selector
+  `[data-vb-section-id="X"]` which also matches every editable
+  descendant (h1, p, img) — those carry the same attribute so the
+  iframe click handler can identify their owning section. As a result
+  the wrapper's `animation: fadeIn !important` cascaded through to the
+  host's `.fadeDownShort` h1, replaced that animation with a
+  zero-duration fadeIn whose `fill-mode: none` left the element at
+  opacity:0 and the text simply stopped being visible. Selector is
+  now `[data-vb-section-id="X"]:not([data-vb-editable])`; cascade
+  stops at the wrapper where it belongs. Same fix applied to the
+  iframe's live-preview `updateSectionStyleInDom` so editor and
+  production stay cascade-equivalent.
+
+- **`animation` and `animation_delay` no longer emit as CSS
+  declarations.** Those keys store CSS CLASS names (e.g. `fadeIn`)
+  consumed by host templates as `vb-anim-fadeIn` class, not as raw
+  `animation:` shorthand values. Emitting `animation: fadeIn` on the
+  wrapper caused the incident above and could also override host
+  keyframe animations silently. Both keys are now in
+  `CSS_SKIPPED_KEYS` — stored verbatim, never rendered.
+
+- **Unit-less spacing values are now auto-postfixed with `px`.**
+  Legacy seeded data stored values as `"40"` / `"80"` — browsers
+  reject `padding-top: 40` as invalid and silently fall back to 0.
+  The resolver now appends `px` when a spacing key (padding_*,
+  margin_*) holds a bare numeric string; values with explicit units
+  (`5rem`, `2vh`) pass through unchanged; colour / alignment / font
+  values are never touched.
+
+Four new unit tests cover the `px` auto-append, the unit passthrough,
+the non-spacing passthrough, and the animation skip. Regression
+covered by browser-automation reproduction before fix (confirmed
+h1 at opacity:0 in live preview; post-fix h1 renders normally).
+
 ## [0.3.2] — 2026-04-17
 
 ### Fixed
