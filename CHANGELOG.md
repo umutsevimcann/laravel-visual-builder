@@ -31,6 +31,61 @@ See [CHANGELOG.md](https://github.com/umutsevimcann/laravel-visual-builder/blob/
 
 Four integration bugs (route double-registration, view data pass, DesignToken table probe, Blade component namespace) surfaced and fixed in commits after the tag. v0.1.1 will capture these.
 
+## [0.6.0] — 2026-04-17
+
+### Added — Template library
+
+- **Save any page's sections as a reusable template.** New toolbar
+  button (copy icon, top of the editor) opens the library modal; a
+  form at the top of the modal takes a name + optional description
+  and snapshots every top-level section (plus nested children of
+  Columns-style containers) as a `BuilderTemplate` row.
+
+- **Apply a template to any target — Replace or Append.** Each
+  library card offers three actions: **Append** (keeps existing
+  sections, adds the template's at the end), **Replace** (drops
+  existing sections, inserts from sort_order 0), and **Delete**
+  (removes the template from the library; pages that used it are
+  untouched). Replace mode confirms before wiping.
+
+- **Forward-compatibility guard.** `ApplyTemplate` consults the
+  `SectionTypeRegistry` for every payload entry — if a template was
+  created when type `testimonials` was registered but the host app
+  no longer registers it, that entry is SKIPPED and counted, the
+  rest still apply. Response surfaces `{ inserted, skipped }` so the
+  admin UI can show a "2 blocks omitted" notice.
+
+- **Portable across targets.** Templates carry neither primary keys
+  nor polymorphic owner references in the `payload` JSON — the Apply
+  action regenerates IDs and wires parent/column_index on the fly.
+  A template authored on a Page can be applied to any target that
+  uses `HasVisualBuilder` (Page, Product, Post, …).
+
+### New endpoints
+
+- `GET    {prefix}/templates` — list (name + description + thumbnail
+  + section_count only; payload left out to keep the grid response light)
+- `POST   {prefix}/templates/{targetType}/{targetId}` — save current
+- `POST   {prefix}/templates/{id}/apply/{targetType}/{targetId}` —
+  apply with `{ mode: 'replace' | 'append' }`
+- `DELETE {prefix}/templates/{id}` — remove from library
+
+### Schema
+
+- New published migration
+  `create_builder_templates_table`. One NOT-NULL `payload` JSON
+  column, one `type` discriminator ('section' for v0.6; `page` and
+  `kit` reserved for future releases), soft indexed on `created_at`
+  (newest-first library query) and `type`.
+
+### Tests
+
+- 6 new feature tests covering the SaveAsTemplate → ApplyTemplate
+  round-trip: top-level snapshot, nested children capture, append
+  mode, replace mode, unknown-type skip, invalid-mode rejection.
+- Total suite: **139 tests / 414 assertions**. Pint + PHPStan level
+  5 clean.
+
 ## [0.5.1] — 2026-04-17
 
 ### Added

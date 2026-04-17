@@ -53,6 +53,7 @@ return [
     'tables' => [
         'sections' => 'builder_sections',
         'revisions' => 'builder_revisions',
+        'templates' => 'builder_templates',
     ],
 
     /*

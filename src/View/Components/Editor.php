@@ -185,6 +185,14 @@ final class Editor extends Component
                 'duplicate_template' => route($namePrefix.'sections.duplicate', [$this->targetType, $this->targetId, 0]),
                 'upload' => route($namePrefix.'upload-image'),
                 'design_tokens' => route($namePrefix.'design-tokens.update'),
+                // v0.6.0 template library — 4 endpoints. Delete / apply
+                // templates carry a `0` placeholder id that the client
+                // swaps for the real id at call-time (same pattern the
+                // sections.destroy / sections.duplicate routes use).
+                'templates_index' => route($namePrefix.'templates.index'),
+                'templates_store' => route($namePrefix.'templates.store', [$this->targetType, $this->targetId]),
+                'templates_apply_template' => route($namePrefix.'templates.apply', [0, $this->targetType, $this->targetId]),
+                'templates_destroy_template' => route($namePrefix.'templates.destroy', [0]),
             ],
             'csrf_token' => csrf_token(),
             'builder_query_param' => $builderPrefix,

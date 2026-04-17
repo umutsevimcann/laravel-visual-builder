@@ -57,6 +57,10 @@
                     <i class="vb-icon vb-icon-clock" aria-hidden="true"></i>
                     <span class="vb-sr">Revisions</span>
                 </button>
+                <button type="button" class="vb-btn vb-btn-ghost" data-vb-action="templates" title="Template library">
+                    <i class="vb-icon vb-icon-copy" aria-hidden="true"></i>
+                    <span class="vb-sr">Templates</span>
+                </button>
                 <span class="vb-toolbar-sep" aria-hidden="true"></span>
                 <button type="button" class="vb-btn vb-btn-ghost vb-device-btn vb-device-active" data-vb-device="desktop" title="Desktop">
                     <i class="vb-icon vb-icon-desktop" aria-hidden="true"></i>
@@ -141,6 +145,20 @@
         <div class="vb-modal-dialog">
             <header class="vb-modal-header">
                 <h3><i class="vb-icon vb-icon-clock" aria-hidden="true"></i> Revisions</h3>
+                <button type="button" class="vb-modal-close" data-vb-modal-close aria-label="Close">×</button>
+            </header>
+            <div class="vb-modal-body" data-vb-modal-body></div>
+        </div>
+    </div>
+
+    {{-- v0.6.0 — Template library modal. Body is filled in by
+         openTemplatesModal() at open time (library list + save-as form).
+         Apply / delete flows run via direct fetch, no sub-forms here. --}}
+    <div class="vb-modal" data-vb-modal="templates" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="vb-modal-backdrop" data-vb-modal-close></div>
+        <div class="vb-modal-dialog vb-modal-dialog-wide">
+            <header class="vb-modal-header">
+                <h3><i class="vb-icon vb-icon-copy" aria-hidden="true"></i> Template library</h3>
                 <button type="button" class="vb-modal-close" data-vb-modal-close aria-label="Close">×</button>
             </header>
             <div class="vb-modal-body" data-vb-modal-body></div>

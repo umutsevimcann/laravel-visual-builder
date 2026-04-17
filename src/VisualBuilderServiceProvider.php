@@ -77,6 +77,7 @@ final class VisualBuilderServiceProvider extends PackageServiceProvider
                 'create_builder_sections_table',
                 'create_builder_revisions_table',
                 'add_parent_and_column_index_to_builder_sections_table',
+                'create_builder_templates_table',
             ])
             ->hasInstallCommand(static function (InstallCommand $command): void {
                 $command

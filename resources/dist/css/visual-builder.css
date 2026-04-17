@@ -536,6 +536,68 @@
 }
 
 /* ================================================================
+   v0.6.0 — Template library modal: 2-col grid of saved templates
+   with per-card Append / Replace / Delete actions.
+   ================================================================ */
+
+.vb-modal-dialog-wide {
+    max-width: 720px;
+}
+
+.vb-tpl-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.vb-tpl-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    background: var(--vb-color-bg-card);
+    border: 1px solid var(--vb-color-border);
+    border-radius: var(--vb-radius);
+    transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.vb-tpl-card:hover {
+    border-color: var(--vb-color-primary);
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+}
+
+.vb-tpl-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.vb-tpl-card-meta {
+    font-size: 11px;
+    color: var(--vb-color-text-muted);
+    white-space: nowrap;
+}
+
+.vb-tpl-card-desc {
+    font-size: 12px;
+    color: var(--vb-color-text-muted);
+    line-height: 1.4;
+}
+
+.vb-tpl-card-actions {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    flex-wrap: wrap;
+}
+
+.vb-tpl-card-actions .vb-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+/* ================================================================
    Traits panel (right) — tabs + form fields
    ================================================================ */
 

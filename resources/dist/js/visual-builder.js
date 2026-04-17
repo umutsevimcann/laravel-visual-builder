@@ -1665,6 +1665,182 @@
         else if (action === 'revisions') openRevisions();
         else if (action === 'undo') undo();
         else if (action === 'redo') redo();
+        else if (action === 'templates') openTemplatesModal();
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Template library (v0.6.0)
+    // ─────────────────────────────────────────────────────────────
+
+    /**
+     * Open the template library modal and refresh the list from the
+     * server. Body is rebuilt every time to stay in sync with
+     * out-of-band creates (another admin saving a template while the
+     * current one keeps the editor open).
+     */
+    async function openTemplatesModal() {
+        const modal = openModal('templates');
+        if (!modal) return;
+        const body = modal.querySelector('[data-vb-modal-body]');
+        if (!body) return;
+
+        setHtml(body, '<div class="vb-empty"><p class="vb-empty-text">Loading templates…</p></div>');
+
+        const saveFormHtml = '<div class="vb-group">'
+            + '<div class="vb-group-title">Save current page</div>'
+            + '<div class="vb-field">'
+            + '<label class="vb-field-label"><span>Template name</span></label>'
+            + '<input type="text" class="vb-field-input" data-vb-tpl-name placeholder="e.g. Hero + Three Features" maxlength="120">'
+            + '</div>'
+            + '<div class="vb-field">'
+            + '<label class="vb-field-label"><span>Description (optional)</span></label>'
+            + '<input type="text" class="vb-field-input" data-vb-tpl-desc placeholder="One-line hint shown in the library" maxlength="255">'
+            + '</div>'
+            + '<button type="button" class="vb-btn vb-btn-primary" data-vb-tpl-save>'
+            + '<i class="vb-icon vb-icon-save" aria-hidden="true"></i> Save as template'
+            + '</button>'
+            + '</div>';
+
+        let libraryHtml = '';
+        try {
+            const response = await fetch(state.config.routes.templates_index, {
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!response.ok) throw new Error('HTTP '+response.status);
+            const data = await response.json();
+            libraryHtml = renderTemplateLibraryHtml(data.templates || []);
+        } catch (err) {
+            libraryHtml = '<div class="vb-empty"><p class="vb-empty-text" style="color:#b91c1c">'
+                + 'Could not load templates: ' + escapeHtml(err.message)
+                + '</p></div>';
+        }
+
+        setHtml(body, saveFormHtml + '<div class="vb-group">'
+            + '<div class="vb-group-title">Library</div>'
+            + libraryHtml
+            + '</div>');
+
+        bindTemplateModalActions(modal, body);
+    }
+
+    function renderTemplateLibraryHtml(templates) {
+        if (!Array.isArray(templates) || templates.length === 0) {
+            return '<div class="vb-empty"><p class="vb-empty-text">No templates saved yet. Build a page and click "Save as template" above.</p></div>';
+        }
+        return '<div class="vb-tpl-grid">' + templates.map(function (t) {
+            return '<div class="vb-tpl-card" data-vb-tpl-id="'+escapeHtml(String(t.id))+'">'
+                + '<div class="vb-tpl-card-header">'
+                + '<strong>'+escapeHtml(t.name)+'</strong>'
+                + '<span class="vb-tpl-card-meta">'+(t.section_count || 0)+' blocks</span>'
+                + '</div>'
+                + (t.description ? '<div class="vb-tpl-card-desc">'+escapeHtml(t.description)+'</div>' : '')
+                + '<div class="vb-tpl-card-actions">'
+                + '<button type="button" class="vb-btn vb-btn-ghost" data-vb-tpl-apply="append" title="Add to end of current page">Append</button>'
+                + '<button type="button" class="vb-btn vb-btn-ghost" data-vb-tpl-apply="replace" title="Replace current page sections">Replace</button>'
+                + '<button type="button" class="vb-btn vb-btn-ghost" data-vb-tpl-delete title="Remove from library" style="color:#b91c1c">×</button>'
+                + '</div>'
+                + '</div>';
+        }).join('') + '</div>';
+    }
+
+    function bindTemplateModalActions(modal, body) {
+        // Close
+        modal.querySelectorAll('[data-vb-modal-close]').forEach(function (btn) {
+            btn.onclick = function () { closeModal(modal); };
+        });
+
+        // Save current as template
+        const saveBtn = body.querySelector('[data-vb-tpl-save]');
+        if (saveBtn) {
+            saveBtn.onclick = async function () {
+                const name = (body.querySelector('[data-vb-tpl-name]') || {}).value || '';
+                const desc = (body.querySelector('[data-vb-tpl-desc]') || {}).value || '';
+                if (name.trim() === '') {
+                    alert('Please enter a template name.');
+                    return;
+                }
+                try {
+                    const response = await fetch(state.config.routes.templates_store, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': state.config.csrf_token,
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json',
+                        },
+                        body: JSON.stringify({ name: name, description: desc || null }),
+                    });
+                    if (!response.ok) throw new Error('HTTP '+response.status);
+                    await response.json();
+                    // Refresh the modal so the new entry appears in the grid.
+                    openTemplatesModal();
+                } catch (err) {
+                    alert('Save failed: ' + err.message);
+                }
+            };
+        }
+
+        // Apply / delete per-card
+        body.querySelectorAll('[data-vb-tpl-id]').forEach(function (card) {
+            const id = card.getAttribute('data-vb-tpl-id');
+
+            card.querySelectorAll('[data-vb-tpl-apply]').forEach(function (btn) {
+                btn.onclick = async function () {
+                    const mode = btn.getAttribute('data-vb-tpl-apply');
+                    if (mode === 'replace' && !confirm('Replace ALL current sections with this template?')) return;
+                    const url = state.config.routes.templates_apply_template.replace(/\/\d+\//, '/'+id+'/');
+                    try {
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': state.config.csrf_token,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({ mode: mode }),
+                        });
+                        if (!response.ok) throw new Error('HTTP '+response.status);
+                        const data = await response.json();
+                        closeModal(modal);
+                        // Reload iframe + pull fresh section list from server
+                        // via a window reload on the admin — template apply
+                        // changed the whole tree, a partial sync would
+                        // desync the undo history.
+                        window.location.reload();
+                        void data;
+                    } catch (err) {
+                        alert('Apply failed: ' + err.message);
+                    }
+                };
+            });
+
+            const delBtn = card.querySelector('[data-vb-tpl-delete]');
+            if (delBtn) {
+                delBtn.onclick = async function () {
+                    if (!confirm('Delete this template from the library? Existing pages that used it are untouched.')) return;
+                    const url = state.config.routes.templates_destroy_template.replace(/\/\d+$/, '/'+id);
+                    try {
+                        const response = await fetch(url, {
+                            method: 'DELETE',
+                            credentials: 'same-origin',
+                            headers: {
+                                'X-CSRF-TOKEN': state.config.csrf_token,
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'application/json',
+                            },
+                        });
+                        if (!response.ok) throw new Error('HTTP '+response.status);
+                        openTemplatesModal();
+                    } catch (err) {
+                        alert('Delete failed: ' + err.message);
+                    }
+                };
+            }
+        });
     }
 
     // ─────────────────────────────────────────────────────────────

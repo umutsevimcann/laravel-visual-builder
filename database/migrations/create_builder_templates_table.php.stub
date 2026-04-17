@@ -1,0 +1,78 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+/**
+ * Builder templates — saved, reusable section bundles.
+ *
+ * A template captures a snapshot of one-or-more BuilderSection rows
+ * (including their content JSON, style JSON, publish flag, and any
+ * children of Columns-style containers) in a single `payload` JSON
+ * column. The template is then applied to another target (a different
+ * Page, Product, Post, …) either in REPLACE mode (drop existing
+ * sections, create new ones from the template) or APPEND mode (leave
+ * existing sections, add the template's at the end).
+ *
+ * Template rows are decoupled from any target — they live across pages
+ * and live past the page that created them. Deleting the originating
+ * page does not delete its templates; deleting the template does not
+ * touch any section.
+ *
+ * `type` allows future expansion to page-level templates ('page') or
+ * design kits ('kit') without a schema change.
+ */
+return new class extends Migration
+{
+    public function up(): void
+    {
+        $tableName = (string) config('visual-builder.tables.templates', 'builder_templates');
+
+        Schema::create($tableName, static function (Blueprint $table): void {
+            $table->id();
+
+            // Admin-facing label. Not translatable — the builder's template
+            // library is an authoring tool, not a content surface. Kept
+            // short enough to fit in a card title (~48 chars target).
+            $table->string('name', 120);
+
+            // One-line optional hint for the library's grid. Null when
+            // the template is self-descriptive from its name alone.
+            $table->string('description', 255)->nullable();
+
+            // Discriminator for the payload shape. v0.6.0 ships 'section'
+            // (a bundle of BuilderSection rows); page-level + design-kit
+            // shapes land in later releases.
+            $table->string('type', 20)->default('section');
+
+            // Optional screenshot / thumbnail (storage path). Users point
+            // at an already-uploaded asset rather than uploading anew —
+            // the library stays a cheap add-on without tying a second
+            // MediaService instance to the migration.
+            $table->string('thumbnail_path', 500)->nullable();
+
+            // The actual section data — array of serialized
+            // BuilderSection snapshots. Schema is validated by
+            // BuilderTemplate::$casts and the Apply action, not by the
+            // DB (JSON is free-form by design so forward-compat
+            // additions don't need a migration).
+            $table->json('payload');
+
+            $table->timestamps();
+
+            // Templates are listed newest-first in the library grid —
+            // index supports the common ORDER BY created_at DESC query.
+            $table->index('created_at', $table->getTable().'_created_idx');
+            $table->index('type', $table->getTable().'_type_idx');
+        });
+    }
+
+    public function down(): void
+    {
+        $tableName = (string) config('visual-builder.tables.templates', 'builder_templates');
+        Schema::dropIfExists($tableName);
+    }
+};

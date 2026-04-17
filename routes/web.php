@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use Umutsevimcann\VisualBuilder\Http\Controllers\BuilderController;
 use Umutsevimcann\VisualBuilder\Http\Controllers\DesignTokenController;
+use Umutsevimcann\VisualBuilder\Http\Controllers\TemplateController;
 
 /*
 |--------------------------------------------------------------------------
@@ -53,3 +54,25 @@ Route::controller(BuilderController::class)->group(static function (): void {
 
 Route::post('design-tokens', [DesignTokenController::class, 'update'])
     ->name('design-tokens.update');
+
+/*
+ * Template library — v0.6.0. Shared across every target; the admin
+ * UI fetches the flat list once on open and then per-target save /
+ * apply calls use the library row id + the current target's morph
+ * type + id.
+ */
+Route::controller(TemplateController::class)->prefix('templates')->group(static function (): void {
+    Route::get('', 'index')->name('templates.index');
+    Route::delete('{id}', 'destroy')
+        ->name('templates.destroy')
+        ->whereNumber('id');
+    Route::post('{targetType}/{targetId}', 'store')
+        ->name('templates.store')
+        ->whereAlpha('targetType')
+        ->whereNumber('targetId');
+    Route::post('{id}/apply/{targetType}/{targetId}', 'apply')
+        ->name('templates.apply')
+        ->whereNumber('id')
+        ->whereAlpha('targetType')
+        ->whereNumber('targetId');
+});
